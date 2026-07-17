@@ -8,6 +8,12 @@ The really intersting find here for anybody who uses this is that ERCOT's commit
 
 The public database dosen't have the actual documents yet becuase it would ballon in size, so instead I've made them all text-searchable and I'm linking the user to the download of the original document. I'm downloading the documents for posterity's sake, and plan to release a version with everything in it when I get some money and can figure out how the hell that would work. 
 
+## The universe of data 
+
+This db includes ERCOT meeting files from all of 2025, and up to july 2026, though it will build on the first of each month since there is about 6 meetings per month to grab, parse, and upload. 
+
+I plan to eventually go back and grab each previous year, as well as add a date filter section in the search function but that didn't fit in my original time frame. 
+
 **Live site:** [ercot-meetings.onrender.com](https://ercot-meetings.onrender.com)
 
 **Limitations, Challenges, Future Fixes**
@@ -15,6 +21,7 @@ The public database dosen't have the actual documents yet becuase it would ballo
 The first real issue I ran into was parsing the PPTX files in a way that got the juciest information into the hands of researchers. Each pptx is full to the brim of graphics, photos, and charts showing big corperate plans for Texas power infrastructure. I tried using some huggingface models to slice out each image, then OCR it, but that became unwieldy really fast. so instead I've used python-pptx to grab every piece of available text on each slide, including speaker notes, and put it into a nicely formatted little database entry.
 
 The second issue is the lack of the source document in the public version of this db. I still don't really know how to fix this. 
+
 
 ---
 
@@ -30,6 +37,10 @@ ercot_details.py     →  documents.csv      (document URL, title, file type, si
 ercot_download.py    →  docs/              (raw files: PDF, DOCX, PPTX, XLSX, HTML)
 ```
 
+
+### Data Validation
+
+This dataset didn't really require any cleaning or manipulation to get into the db format, it was more a challenge of making sure that my scrapers were grabbing the right documents, and labling them properly. The main way I did this was to start by running a month at a time. 
 ### Text Extraction
 
 Each downloaded file is parsed to plain text using format-specific libraries:
