@@ -169,6 +169,7 @@
     <a href="{{ url_for('meetings') }}" {% if request.endpoint == 'meetings' %}class="active"{% endif %}>Meetings</a>
     <a href="{{ url_for('search') }}"   {% if request.endpoint == 'search'   %}class="active"{% endif %}>Search</a>
     <a href="{{ url_for('entities') }}" {% if request.endpoint in ('entities','entity') %}class="active"{% endif %}>Entities</a>
+    <a href="https://github.com/ccb2195-ux/ercot-meetings#readme" target="_blank" rel="noopener">Methodology</a>
   </nav>
 
   <div class="container">
