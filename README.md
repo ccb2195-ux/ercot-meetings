@@ -1,6 +1,12 @@
 # ERCOT Meeting Database
 
-A searchable archive of ERCOT committee meeting documents — agendas, minutes, presentations, and supporting materials — with full-text search and named entity extraction.
+## What the hell is this thing?
+
+This is a project I built for Data and Databased with Jon Thirkield at Columbia Gradaute School of Journalism. The main goal was to take all of the meeting data from the ERCOT webite (the Texas energy regulator) and make it easily serachable by scraping all the documents. I used beautifulsoup4 for the scraping, flask & render for the app, and python libraries like spacy for entity recognition. Claude Code was used to help me build the HTML, SQlite, Flask, and some portions of the scraping infrastructure. I have read through all of the code, and won't pretend to perfectly udnerstand everything that happened, but I'm using this as a learning experiance to try and understand/debug what Claude helped create by reviewing it over time. 
+
+The really intersting find here for anybody who uses this is that ERCOT's committee meetings usually have some sort of pptx, either internal or a presenation from a company, which really clearly illistrate what ERCOT is thinking about in terms of energy, infratructure, and AI. Some of the companies I've found in these pptx documents include NVDIA. and the main Lobbying group for AI datacenters, the Data Center Coalition.
+
+The public database dosen't have the actual documents yet becuase it would ballon in size, so instead I've made them all text-searchable and I'm linking the user to the download of the original document. I'm downloading the documents for posterity's sake, and plan to release a version with everything in it when I get some money and can figure out how the hell that would work. 
 
 **Live site:** [ercot-meetings.onrender.com](https://ercot-meetings.onrender.com)
 
@@ -10,7 +16,7 @@ A searchable archive of ERCOT committee meeting documents — agendas, minutes, 
 
 ### Data Collection
 
-Documents are scraped directly from the [ERCOT public calendar](https://www.ercot.com/calendar). No API — the pipeline parses the calendar HTML to enumerate meetings, then fetches each meeting page to collect document links and metadata.
+Documents are scraped directly from the [ERCOT public calendar](https://www.ercot.com/calendar). The pipeline parses the calendar HTML to enumerate meetings, then fetches each meeting page to collect document links and metadata.
 
 ```
 ercot_enumerate.py   →  meetings.csv       (meeting URL, date, committee, title, status)
@@ -41,6 +47,8 @@ Document text is run through [spaCy](https://spacy.io/) (`en_core_web_lg`) to ex
 - **ORG** — organizations, companies, and working groups
 - **NPRR** — custom regex pattern for ERCOT nodal protocol revision requests
 
+**It is important to note that the spacy recognition overfitted significantly so I have an admin portal on the backend to allow me to filter out stupid/bad entites. For example, spacy though words like Batch or Zero were names so I pulled those out.**
+
 ```
 extract_entities.py   →  entities table in ercot.db
 ```
@@ -53,8 +61,6 @@ SQLite with [FTS5](https://www.sqlite.org/fts5.html) full-text search. The local
 build_db.py          →  ercot.db           (full local DB with document_text)
 build_public_db.py   →  ercot_public.db    (slim DB: contentless FTS index + 300-char teasers)
 ```
-
-The slim DB keeps the full FTS inverted index (so search quality is identical) but drops the stored document text, cutting the file size by ~74%.
 
 ### Web Application
 
@@ -80,12 +86,6 @@ The app runs on [Render](https://render.com) (free tier). Because Render has no 
 python monthly_update.py
 ```
 Scrapes the current month, rebuilds the DB, builds the public DB, and prompts to publish a new GitHub Release.
-
-### Backfill a historical year
-```bash
-python backfill_year.py --year 2022
-```
-
 ---
 
 ## Stack
