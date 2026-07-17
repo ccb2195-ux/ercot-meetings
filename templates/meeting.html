@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ meeting['title'] }} — ERCOT Minutes{% endblock %}
+{% block content %}
+
+<div class="breadcrumb">
+  <a href="{{ url_for('meetings') }}">Meetings</a> &rsaquo; {{ meeting['committee'] }}
+</div>
+
+<h1>
+  {{ meeting['title'] }}
+  {% if meeting['status'] == 'cancelled' %}
+  <span class="badge badge-cancelled" style="vertical-align:middle; margin-left:.4rem;">Cancelled</span>
+  {% endif %}
+</h1>
+
+<div class="meta" style="margin-bottom:2rem; font-size:.9rem;">
+  <span>{{ meeting['date'] }}</span>
+  <span class="pill">{{ meeting['committee'] }}</span>
+  <a href="{{ meeting['url'] }}" target="_blank" style="color:var(--blue); text-decoration:none;">
+    View on ERCOT.com ↗
+  </a>
+</div>
+
+<div class="section-header">
+  <h2>Documents</h2>
+  <span class="count-label">{{ docs|length }} file{{ 's' if docs|length != 1 else '' }}</span>
+</div>
+
+{% if by_type %}
+  {% for type_name, type_docs in by_type.items() %}
+  <div class="doc-group">
+    <h3>
+      <span class="badge badge-{{ type_name.lower() }}">{{ type_name }}</span>
+      &nbsp;{{ type_docs|length }} file{{ 's' if type_docs|length != 1 else '' }}
+    </h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Document</th>
+            <th style="text-align:right;">Size</th>
+            <th style="text-align:center;">Minutes?</th>
+            <th style="text-align:center;">Text</th>
+            <th style="text-align:center;">Download</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for d in type_docs %}
+        <tr>
+          <td>{{ d['doc_title'] }}</td>
+          <td style="text-align:right; color:var(--muted); white-space:nowrap;">
+            {% if d['size_bytes'] %}
+              {% if d['size_bytes'] >= 1048576 %}
+                {{ "%.1f MB" | format(d['size_bytes'] / 1048576) }}
+              {% else %}
+                {{ "%.0f KB" | format(d['size_bytes'] / 1024) }}
+              {% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td style="text-align:center;">
+            {% if d['looks_like_minutes'] %}
+            <span class="badge badge-minutes">✓</span>
+            {% else %}—{% endif %}
+          </td>
+          <td style="text-align:center;">
+            {% if d['extraction_status'] == 'done' %}
+            <a href="{{ url_for('doc', doc_id=d['id']) }}"
+               style="color:var(--blue); text-decoration:none; font-size:.8125rem; font-weight:600;">
+              View →
+            </a>
+            {% else %}
+            <span style="color:var(--muted); font-size:.8125rem;">—</span>
+            {% endif %}
+          </td>
+          <td style="text-align:center;">
+            <a href="{{ d['doc_url'] }}" target="_blank"
+               style="display:inline-block; padding:.3rem .75rem; background:var(--navy);
+                      color:#fff; border-radius:5px; font-size:.75rem; font-weight:600;
+                      text-decoration:none; white-space:nowrap;">
+              ↓ {{ d['url_ext'].upper() }}
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="empty">No documents found for this meeting.</p>
+{% endif %}
+
+{% endblock %}

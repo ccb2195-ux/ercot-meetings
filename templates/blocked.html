@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Blocked Entities — ERCOT Meeting Database{% endblock %}
+{% block content %}
+
+<div class="breadcrumb">
+  <a href="{{ url_for('entities') }}">Entities</a> &rsaquo; Blocked
+</div>
+
+<div class="section-header">
+  <h1 style="margin-bottom:0;">Blocked Entities</h1>
+  <a href="{{ url_for('entities') }}"
+     style="font-size:.875rem; color:var(--blue); text-decoration:none;">← Back to entities</a>
+</div>
+
+<p style="color:var(--muted); font-size:.875rem; margin:.5rem 0 1.5rem;">
+  Blocked entities are hidden from the entity browser, visualizations, and search.
+  They still exist in the database — unblocking restores them immediately.
+</p>
+
+{% if blocked %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Entity</th>
+        <th>Type</th>
+        <th style="width:100px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for b in blocked %}
+    <tr>
+      <td style="font-weight:500;">{{ b['entity_text'] }}</td>
+      <td>
+        <span class="badge"
+              style="background:{% if b['entity_type']=='PERSON' %}#dbeafe; color:#1d4ed8
+                     {% elif b['entity_type']=='ORG' %}#f3e8ff; color:#7e22ce
+                     {% else %}#dcfce7; color:#166534{% endif %};">
+          {{ b['entity_type'] }}
+        </span>
+      </td>
+      {% if admin_mode %}
+      <td>
+        <form method="post" action="{{ url_for('entity_unblock') }}" style="margin:0;">
+          <input type="hidden" name="name" value="{{ b['entity_text'] }}">
+          <input type="hidden" name="type" value="{{ b['entity_type'] }}">
+          <button type="submit"
+                  style="background:none; border:1px solid var(--border); border-radius:5px;
+                         padding:.2rem .65rem; font-size:.8rem; color:var(--blue);
+                         cursor:pointer; font-family:inherit; font-weight:500;">
+            Unblock
+          </button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center; color:var(--muted); padding:2.5rem;">
+  No blocked entities. Use the <strong>✕ Block</strong> button on the
+  <a href="{{ url_for('entities') }}" style="color:var(--blue);">Entities</a> page
+  to hide incorrect results.
+</div>
+{% endif %}
+
+{% endblock %}

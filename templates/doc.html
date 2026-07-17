@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ doc['doc_title'] }} — ERCOT Minutes{% endblock %}
+{% block content %}
+
+<div class="breadcrumb">
+  <a href="{{ url_for('meetings') }}">Meetings</a> &rsaquo;
+  <a href="{{ url_for('meeting', slug=doc['meeting_url'].split('/calendar/')[-1]) }}">{{ meeting['title'] if meeting else 'Meeting' }}</a> &rsaquo;
+  {{ doc['doc_title'][:60] }}{% if doc['doc_title']|length > 60 %}…{% endif %}
+</div>
+
+<h1>{{ doc['doc_title'] }}</h1>
+
+<div class="meta" style="margin-bottom:1.5rem;">
+  <span>{{ doc['meeting_date'] }}</span>
+  <span class="pill">{{ doc['committee'] }}</span>
+  <span class="badge badge-{{ doc['url_ext'] }}">{{ doc['url_ext'].upper() }}</span>
+  {% if doc['looks_like_minutes'] %}<span class="badge badge-minutes">Minutes</span>{% endif %}
+  {% if doc['size_bytes'] %}
+  <span>
+    {% if doc['size_bytes'] >= 1048576 %}{{ "%.1f MB"|format(doc['size_bytes']/1048576) }}
+    {% else %}{{ "%.0f KB"|format(doc['size_bytes']/1024) }}{% endif %}
+  </span>
+  {% endif %}
+  <a href="{{ doc['doc_url'] }}" target="_blank" style="color:var(--blue); text-decoration:none;">
+    Download original ↗
+  </a>
+</div>
+
+{% if doc['url_ext'] in ('docx', 'doc') and doc['extraction_status'] == 'done' and serve_local %}
+<h2 style="margin-bottom:.75rem;">Document</h2>
+<iframe src="{{ url_for('render_doc', doc_id=doc['id']) }}"
+        style="width:100%; height:80vh; border:1px solid var(--border); border-radius:10px; display:block; margin-bottom:1.5rem;">
+</iframe>
+
+{% elif doc['url_ext'] == 'pdf' and serve_local %}
+<h2 style="margin-bottom:.75rem;">Document</h2>
+<iframe src="{{ url_for('serve_doc', filename=doc['filename']) }}"
+        style="width:100%; height:80vh; border:1px solid var(--border); border-radius:10px; display:block; margin-bottom:1.5rem;">
+</iframe>
+
+{% elif body_text %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem;">
+  <h2>Extracted Text</h2>
+  <span class="count-label">{{ body_text|length|int }} characters</span>
+</div>
+<div style="
+  background:#fff; border:1px solid var(--border); border-radius:10px;
+  padding:1.5rem; white-space:pre-wrap; font-size:.875rem; line-height:1.75;
+  color:var(--text); max-height:600px; overflow-y:auto; font-family:inherit;
+  margin-bottom:1.5rem;
+">{{ body_text }}</div>
+
+{% elif doc['extraction_status'] == 'empty' %}
+<div class="card" style="color:var(--muted); text-align:center; padding:2rem;">
+  No text could be extracted from this file — it may be a scanned image document.
+</div>
+
+{% elif doc['extraction_status'].startswith('skipped') %}
+<div class="card" style="color:var(--muted); text-align:center; padding:2rem;">
+  Text extraction not supported for legacy {{ doc['url_ext'].upper() }} files yet.
+</div>
+
+{% else %}
+<div class="card" style="color:var(--muted); text-align:center; padding:2rem;">
+  Text not yet extracted. Run <code>extract_text.py</code> to index this document.
+</div>
+{% endif %}
+
+{% if doc['url_ext'] == 'pdf' and body_text and serve_local %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem;">
+  <h2>Extracted Text</h2>
+  <span class="count-label">{{ body_text|length|int }} characters</span>
+</div>
+<div style="
+  background:#fff; border:1px solid var(--border); border-radius:10px;
+  padding:1.5rem; white-space:pre-wrap; font-size:.875rem; line-height:1.75;
+  color:var(--text); max-height:400px; overflow-y:auto; font-family:inherit;
+  margin-bottom:1.5rem;
+">{{ body_text }}</div>
+{% endif %}
+
+{% set people = namespace(items=[]) %}
+{% set orgs   = namespace(items=[]) %}
+{% set nprrs  = namespace(items=[]) %}
+
+{% if doc['extraction_status'] == 'done' %}
+  {# entities are passed from the route — show inline tags #}
+  {% if entities %}
+  <div style="margin-bottom:1.5rem;">
+    {% if entities | selectattr('entity_type','equalto','PERSON') | list %}
+    <div style="margin-bottom:.6rem;">
+      <span style="font-size:.75rem; font-weight:700; text-transform:uppercase;
+                   letter-spacing:.05em; color:var(--muted); margin-right:.5rem;">People</span>
+      {% for e in entities %}{% if e.entity_type == 'PERSON' %}
+      <a href="{{ url_for('entity', name=e.entity_text) }}?type=PERSON"
+         style="display:inline-block; margin:.2rem .25rem; padding:.2rem .6rem;
+                background:#dbeafe; color:#1d4ed8; border-radius:4px;
+                font-size:.8rem; text-decoration:none; font-weight:500;">
+        {{ e.entity_text }} <span style="opacity:.6;">×{{ e.count }}</span>
+      </a>
+      {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+    {% if entities | selectattr('entity_type','equalto','ORG') | list %}
+    <div style="margin-bottom:.6rem;">
+      <span style="font-size:.75rem; font-weight:700; text-transform:uppercase;
+                   letter-spacing:.05em; color:var(--muted); margin-right:.5rem;">Organizations</span>
+      {% for e in entities %}{% if e.entity_type == 'ORG' %}
+      <a href="{{ url_for('entity', name=e.entity_text) }}?type=ORG"
+         style="display:inline-block; margin:.2rem .25rem; padding:.2rem .6rem;
+                background:#f3e8ff; color:#7e22ce; border-radius:4px;
+                font-size:.8rem; text-decoration:none; font-weight:500;">
+        {{ e.entity_text }} <span style="opacity:.6;">×{{ e.count }}</span>
+      </a>
+      {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+    {% if entities | selectattr('entity_type','equalto','NPRR') | list %}
+    <div style="margin-bottom:.6rem;">
+      <span style="font-size:.75rem; font-weight:700; text-transform:uppercase;
+                   letter-spacing:.05em; color:var(--muted); margin-right:.5rem;">NPRR Numbers</span>
+      {% for e in entities %}{% if e.entity_type == 'NPRR' %}
+      <a href="{{ url_for('entity', name=e.entity_text) }}?type=NPRR"
+         style="display:inline-block; margin:.2rem .25rem; padding:.2rem .6rem;
+                background:#dcfce7; color:#166534; border-radius:4px;
+                font-size:.8rem; text-decoration:none; font-weight:500;">
+        {{ e.entity_text }} <span style="opacity:.6;">×{{ e.count }}</span>
+      </a>
+      {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endif %}
+
+{% if ocr_text %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem;">
+  <h2>OCR — Slide Graphics</h2>
+  <span class="count-label">text extracted from embedded images</span>
+</div>
+<div style="
+  background:#fffbeb; border:1px solid #fde68a; border-radius:10px;
+  padding:1.5rem; white-space:pre-wrap; font-size:.875rem; line-height:1.75;
+  color:var(--text); max-height:400px; overflow-y:auto; font-family:inherit;
+">{{ ocr_text }}</div>
+{% endif %}
+
+{% endblock %}

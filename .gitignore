@@ -1,0 +1,13 @@
+ercot.db
+ercot_public.db
+docs/
+cache/
+cache_details/
+manifest.csv
+meetings.csv
+documents.csv
+agenda.csv
+__pycache__/
+*.pyc
+.env
+HANDOFF.md

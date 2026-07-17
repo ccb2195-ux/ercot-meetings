@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% block title %}ERCOT Meeting Database{% endblock %}
+{% block content %}
+<style>
+  .viz-root {
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --s1: #2a78d6;
+    --s2: #1baf7a;
+    --s3: #eda100;
+    --s4: #008300;
+    --s5: #4a3aa7;
+  }
+  @media (prefers-color-scheme: dark) {
+    .viz-root {
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --s1: #3987e5;
+      --s2: #199e70;
+      --s3: #c98500;
+      --s4: #008300;
+      --s5: #9085e9;
+    }
+  }
+  .viz-section { margin-bottom: 2rem; }
+  .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .viz-card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.25rem;
+  }
+  .viz-card h3 { font-size: .9375rem; font-weight: 600; margin-bottom: .1rem; color: var(--text-primary, #0b0b0b); }
+  .viz-card .viz-sub { font-size: .8rem; color: var(--text-muted, #898781); margin-bottom: 1rem; }
+  @media (max-width: 640px) {
+    .viz-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<h1>ERCOT Meeting Database</h1>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="num">{{ "{:,}".format(stats.meetings) }}</div>
+    <div class="label">Meetings</div>
+  </div>
+  <div class="stat-card">
+    <div class="num">{{ "{:,}".format(stats.documents) }}</div>
+    <div class="label">Documents</div>
+  </div>
+  <div class="stat-card">
+    <div class="num">{{ stats.committees }}</div>
+    <div class="label">Committees</div>
+  </div>
+  <div class="stat-card">
+    <div class="num">{{ stats.minutes }}</div>
+    <div class="label">Minutes Files</div>
+  </div>
+</div>
+
+<form class="search-bar" action="{{ url_for('search') }}" method="get">
+  <input name="q" placeholder="Search documents by title..." autofocus>
+  <button type="submit">Search</button>
+</form>
+
+<div class="type-grid">
+  {% for t in type_counts %}
+  <a href="{{ url_for('search', type=t['url_ext']) }}" style="text-decoration:none;">
+    <span class="badge badge-{{ t['url_ext'] }}">{{ t['url_ext'].upper() }} &nbsp;{{ t['n'] }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<div style="background:#fff; border:1px solid var(--border); border-radius:10px; padding:1.25rem 1.5rem; margin-bottom:2rem;">
+  <h2 style="margin-bottom:1rem;">Export Dataset</h2>
+  <div class="filters" style="margin-bottom:1rem;">
+    <select id="f-committee">
+      <option value="">All committees</option>
+      {% for c in committees %}
+      <option value="{{ c['committee'] }}">{{ c['committee'] }}</option>
+      {% endfor %}
+    </select>
+    <select id="f-year">
+      <option value="">All years</option>
+      {% for y in years %}
+      <option value="{{ y['yr'] }}">{{ y['yr'] }}</option>
+      {% endfor %}
+    </select>
+    <select id="f-type">
+      <option value="">All types</option>
+      {% for t in type_counts %}
+      <option value="{{ t['url_ext'] }}">{{ t['url_ext'].upper() }}</option>
+      {% endfor %}
+    </select>
+    <label style="display:flex; align-items:center; gap:.4rem; font-size:.875rem; font-weight:500; cursor:pointer;">
+      <input type="checkbox" id="f-minutes"> Minutes only
+    </label>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+    <span id="export-count" style="font-size:.875rem; color:var(--muted); font-weight:500;">
+      — documents match
+    </span>
+    <a id="btn-csv" href="#"
+       style="padding:.5rem 1.1rem; background:var(--blue); color:#fff; border-radius:7px;
+              font-size:.875rem; font-weight:600; text-decoration:none;">
+      ↓ Download CSV
+    </a>
+    <a id="btn-zip" href="#"
+       style="padding:.5rem 1.1rem; background:var(--navy); color:#fff; border-radius:7px;
+              font-size:.875rem; font-weight:600; text-decoration:none;">
+      ↓ Download ZIP
+    </a>
+    <span id="zip-warning" style="font-size:.8125rem; color:#b45309; display:none;">
+      ⚠ Large set — ZIP may take a moment to build
+    </span>
+  </div>
+</div>
+
+<script>
+  const fields = {
+    committee: document.getElementById('f-committee'),
+    year:      document.getElementById('f-year'),
+    type:      document.getElementById('f-type'),
+    minutes:   document.getElementById('f-minutes'),
+  };
+  const countEl   = document.getElementById('export-count');
+  const btnCsv    = document.getElementById('btn-csv');
+  const btnZip    = document.getElementById('btn-zip');
+  const zipWarn   = document.getElementById('zip-warning');
+
+  function buildParams() {
+    const p = new URLSearchParams();
+    if (fields.committee.value) p.set('committee', fields.committee.value);
+    if (fields.year.value)      p.set('year',      fields.year.value);
+    if (fields.type.value)      p.set('type',      fields.type.value);
+    if (fields.minutes.checked) p.set('minutes',   '1');
+    return p;
+  }
+
+  function updateLinks() {
+    const p = buildParams();
+    btnCsv.href = '/download/csv?' + p;
+    btnZip.href = '/download/zip?' + p;
+    fetch('/download/count?' + p)
+      .then(r => r.json())
+      .then(d => {
+        countEl.textContent = d.count.toLocaleString() + ' documents match';
+        zipWarn.style.display = d.count > 200 ? 'inline' : 'none';
+      });
+  }
+
+  Object.values(fields).forEach(el => el.addEventListener('change', updateLinks));
+  updateLinks();
+</script>
+
+{% if has_entities %}
+<div class="viz-section viz-root">
+
+  <!-- Top people & orgs bar charts -->
+  <div class="viz-grid">
+    <div class="viz-card">
+      <h3>Top People</h3>
+      <p class="viz-sub">by number of documents mentioning them</p>
+      <canvas id="chart-people" height="260"></canvas>
+    </div>
+    <div class="viz-card">
+      <h3>Top Organizations</h3>
+      <p class="viz-sub">by number of documents mentioning them</p>
+      <canvas id="chart-orgs" height="260"></canvas>
+    </div>
+  </div>
+
+  <!-- Mentions over time -->
+  <div class="viz-card" style="margin-bottom:1rem;">
+    <h3>Top 5 Organizations — Monthly Mentions</h3>
+    <p class="viz-sub">documents per month referencing each organization, last 6 months</p>
+    <canvas id="chart-timeline" height="120"></canvas>
+  </div>
+
+  <!-- Top 5 people monthly trend -->
+  <div class="viz-card">
+    <h3>Top 5 People — Monthly Mentions</h3>
+    <p class="viz-sub">documents per month referencing each person, last 6 months</p>
+    <canvas id="chart-people-trend" height="120"></canvas>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  if (typeof Chart === 'undefined') {
+    document.querySelector('.viz-section').innerHTML =
+      '<p style="color:var(--muted);padding:1rem;">Charts unavailable — could not load Chart.js (CDN unreachable?).</p>';
+    return;
+  }
+
+  const peopleLabels = {{ top_people | map(attribute='entity_text') | list | tojson }};
+  const peopleCounts = {{ top_people | map(attribute='doc_count')   | list | tojson }};
+  const orgLabels    = {{ top_orgs   | map(attribute='entity_text') | list | tojson }};
+  const orgCounts    = {{ top_orgs   | map(attribute='doc_count')   | list | tojson }};
+
+  if (!peopleLabels.length && !orgLabels.length) {
+    document.querySelector('.viz-section').innerHTML =
+      '<p style="color:var(--muted);padding:1rem;">No entity data yet — run <code>python extract_entities.py</code> to populate.</p>';
+    return;
+  }
+
+  const style   = getComputedStyle(document.querySelector('.viz-root'));
+  const PALETTE = ['--s1','--s2','--s3','--s4','--s5'].map(v => style.getPropertyValue(v).trim());
+  const C_PPL   = PALETTE[0];
+  const C_ORG   = PALETTE[4];
+  const GRID    = style.getPropertyValue('--gridline').trim();
+  const MUTED   = style.getPropertyValue('--text-muted').trim();
+  const PRI     = style.getPropertyValue('--text-primary').trim();
+
+  const baseOpts = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#94a3b8',
+        padding: 10, cornerRadius: 6,
+      },
+    },
+    scales: {
+      x: { grid: { color: GRID }, ticks: { color: MUTED, font: { size: 11 } }, border: { color: GRID } },
+      y: { grid: { display: false }, ticks: { color: MUTED, font: { size: 11 } }, border: { display: false } },
+    },
+  };
+
+  // People bar chart
+  new Chart(document.getElementById('chart-people'), {
+    type: 'bar',
+    data: {
+      labels: peopleLabels,
+      datasets: [{
+        data:  peopleCounts,
+        backgroundColor: C_PPL,
+        borderRadius: { topRight: 4, bottomRight: 4 },
+        borderSkipped: 'left',
+      }]
+    },
+    options: {
+      ...baseOpts,
+      indexAxis: 'y',
+      plugins: { ...baseOpts.plugins,
+        tooltip: { ...baseOpts.plugins.tooltip,
+          callbacks: { label: ctx => ` ${ctx.raw} document${ctx.raw !== 1 ? 's' : ''}` }
+        }
+      },
+      scales: {
+        x: { ...baseOpts.scales.x, beginAtZero: true,
+             ticks: { ...baseOpts.scales.x.ticks, precision: 0 } },
+        y: { ...baseOpts.scales.y, ticks: { color: MUTED, font: { size: 11 },
+             callback: function(v) { const l = this.getLabelForValue(v); return l && l.length > 22 ? l.slice(0,20)+'…' : l; } } },
+      },
+    },
+  });
+
+  // Orgs bar chart
+  new Chart(document.getElementById('chart-orgs'), {
+    type: 'bar',
+    data: {
+      labels: orgLabels,
+      datasets: [{
+        data:  orgCounts,
+        backgroundColor: C_ORG,
+        borderRadius: { topRight: 4, bottomRight: 4 },
+        borderSkipped: 'left',
+      }]
+    },
+    options: {
+      ...baseOpts,
+      indexAxis: 'y',
+      plugins: { ...baseOpts.plugins,
+        tooltip: { ...baseOpts.plugins.tooltip,
+          callbacks: { label: ctx => ` ${ctx.raw} document${ctx.raw !== 1 ? 's' : ''}` }
+        }
+      },
+      scales: {
+        x: { ...baseOpts.scales.x, beginAtZero: true,
+             ticks: { ...baseOpts.scales.x.ticks, precision: 0 } },
+        y: { ...baseOpts.scales.y, ticks: { color: MUTED, font: { size: 11 },
+             callback: function(v) { const l = this.getLabelForValue(v); return l && l.length > 22 ? l.slice(0,20)+'…' : l; } } },
+      },
+    },
+  });
+
+  // Shared month formatter
+  const MO_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function fmtMonths(months) {
+    return months.map(m => { const [y,mo]=m.split('-'); return MO_NAMES[parseInt(mo)-1]+' '+y; });
+  }
+
+  // Top-5 org monthly trend chart
+  const orgTrend = {{ org_trend | tojson }};
+  new Chart(document.getElementById('chart-timeline'), {
+    type: 'line',
+    data: {
+      labels: fmtMonths(orgTrend.months),
+      datasets: orgTrend.series.map((s, i) => ({
+        label: s.name,
+        data: s.data,
+        borderColor: PALETTE[i],
+        backgroundColor: PALETTE[i] + '22',
+        borderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
+        tension: 0.3, fill: false,
+      })),
+    },
+    options: {
+      ...baseOpts,
+      plugins: {
+        ...baseOpts.plugins,
+        legend: {
+          display: true, position: 'top', align: 'end',
+          labels: { color: PRI, boxWidth: 12, boxHeight: 12,
+                    padding: 16, font: { size: 12 } },
+        },
+        tooltip: { ...baseOpts.plugins.tooltip, mode: 'index', intersect: false },
+      },
+    },
+  });
+  // Top-5 people monthly trend chart
+  const peopleTrend = {{ people_trend | tojson }};
+  new Chart(document.getElementById('chart-people-trend'), {
+    type: 'line',
+    data: {
+      labels: fmtMonths(peopleTrend.months),
+      datasets: peopleTrend.series.map((s, i) => ({
+        label: s.name,
+        data: s.data,
+        borderColor: PALETTE[i],
+        backgroundColor: PALETTE[i] + '22',
+        borderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
+        tension: 0.3, fill: false,
+      })),
+    },
+    options: {
+      ...baseOpts,
+      plugins: {
+        ...baseOpts.plugins,
+        legend: {
+          display: true, position: 'top', align: 'end',
+          labels: { color: PRI, boxWidth: 12, boxHeight: 12,
+                    padding: 16, font: { size: 12 } },
+        },
+        tooltip: { ...baseOpts.plugins.tooltip, mode: 'index', intersect: false },
+      },
+    },
+  });
+})();
+</script>
+{% endif %}
+
+<div class="section-header">
+  <h2>Recent Meetings</h2>
+  <a href="{{ url_for('meetings') }}" style="font-size:.875rem; color:var(--blue); text-decoration:none;">View all →</a>
+</div>
+
+{% for m in recent %}
+<div class="card">
+  <a class="card-title" href="{{ url_for('meeting', slug=m['url'].split('/calendar/')[-1]) }}">
+    {{ m['title'] }}
+  </a>
+  <div class="meta">
+    <span>{{ m['date'] }}</span>
+    <span class="pill">{{ m['committee'] }}</span>
+    <span>{{ m['doc_count'] }} document{{ 's' if m['doc_count'] != 1 else '' }}</span>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

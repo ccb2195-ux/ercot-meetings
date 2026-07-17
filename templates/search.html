@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Search — ERCOT Minutes{% endblock %}
+{% block content %}
+
+<h1>Search Documents</h1>
+
+<form action="{{ url_for('search') }}" method="get">
+  <div class="search-bar">
+    <input name="q" value="{{ q }}" placeholder="Search by document title..." autofocus>
+    <button type="submit">Search</button>
+  </div>
+  <div class="filters">
+    <span class="filter-label">Filter:</span>
+    <select name="type" onchange="this.form.submit()">
+      <option value="">All types</option>
+      {% for t in all_types %}
+      <option value="{{ t['url_ext'] }}" {% if t['url_ext'] == type_filter %}selected{% endif %}>
+        {{ t['url_ext'].upper() }}
+      </option>
+      {% endfor %}
+    </select>
+    <select name="committee" onchange="this.form.submit()">
+      <option value="">All committees</option>
+      {% for c in all_committees %}
+      <option value="{{ c['committee'] }}" {% if c['committee'] == committee %}selected{% endif %}>
+        {{ c['committee'] }}
+      </option>
+      {% endfor %}
+    </select>
+    {% if q or type_filter or committee %}
+    <a href="{{ url_for('search') }}" style="font-size:.8125rem; color:var(--muted); text-decoration:none;">✕ Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if q or type_filter or committee %}
+  <p class="count-label" style="margin-bottom:1rem;">
+    {{ results|length }} result{{ 's' if results|length != 1 else '' }}
+    {% if q %} for <strong>"{{ q }}"</strong>{% endif %}
+    {% if type_filter %} &mdash; type: <strong>{{ type_filter.upper() }}</strong>{% endif %}
+    {% if committee %} &mdash; committee: <strong>{{ committee }}</strong>{% endif %}
+  </p>
+
+  {% if results %}
+    <p class="count-label" style="margin-bottom:.75rem;">
+      {% if used_fts %}
+        Searching full document text
+      {% else %}
+        Searching document titles only — run <code>extract_text.py</code> to enable full-text search
+      {% endif %}
+    </p>
+    {% for r in results %}
+    <div class="card">
+      <a class="card-title" href="{{ r['doc_url'] }}" target="_blank">{{ r['doc_title'] }}</a>
+      <span class="badge badge-{{ r['url_ext'] }}" style="margin-left:.5rem;">{{ r['url_ext'].upper() }}</span>
+      {% if r['looks_like_minutes'] %}<span class="badge badge-minutes" style="margin-left:.3rem;">Minutes</span>{% endif %}
+      {% if r['snippet'] %}
+      <div style="margin:.5rem 0; font-size:.8375rem; color:var(--muted); line-height:1.5;">
+        {{ r['snippet'] | safe }}
+      </div>
+      {% endif %}
+      <div class="meta">
+        <span>{{ r['meeting_date'] }}</span>
+        <span class="pill">{{ r['committee'] }}</span>
+        <a href="{{ url_for('meeting', slug=r['meeting_url'].split('/calendar/')[-1]) }}"
+           style="color:var(--blue); text-decoration:none;">
+          {{ r['meeting_title'] }} →
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">No documents matched your filters.</p>
+  {% endif %}
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ERCOT Meeting Minutes{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy:   #0f172a;
+      --navy2:  #1e293b;
+      --blue:   #3b82f6;
+      --light:  #f1f5f9;
+      --border: #e2e8f0;
+      --text:   #1e293b;
+      --muted:  #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', system-ui, sans-serif; color: var(--text); background: var(--light); font-size: 15px; }
+
+    /* NAV */
+    nav {
+      background: var(--navy); color: #fff;
+      padding: 0 2rem; height: 56px;
+      display: flex; align-items: center; gap: 2rem;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,.3);
+    }
+    .nav-brand { font-weight: 700; font-size: 1rem; color: #fff; text-decoration: none; letter-spacing: -.01em; }
+    .nav-brand span { color: var(--blue); }
+    nav a { color: #94a3b8; text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: color .15s; }
+    nav a:hover, nav a.active { color: #fff; }
+    .nav-right { margin-left: auto; }
+
+    /* LAYOUT */
+    .container { max-width: 1040px; margin: 0 auto; padding: 2rem 1.25rem; }
+
+    /* HEADINGS */
+    h1 { font-size: 1.625rem; font-weight: 700; margin-bottom: 1.25rem; letter-spacing: -.02em; }
+    h2 { font-size: 1.125rem; font-weight: 600; margin-bottom: .75rem; }
+    h3 { font-size: .9375rem; font-weight: 600; }
+
+    /* SEARCH BAR */
+    .search-bar { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
+    .search-bar input {
+      flex: 1; padding: .625rem 1rem; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: .9375rem; font-family: inherit;
+      background: #fff; transition: border-color .15s;
+    }
+    .search-bar input:focus { outline: none; border-color: var(--blue); }
+    .search-bar button {
+      padding: .625rem 1.25rem; background: var(--blue); color: #fff;
+      border: none; border-radius: 8px; cursor: pointer;
+      font-size: .9375rem; font-weight: 600; font-family: inherit;
+      transition: background .15s;
+    }
+    .search-bar button:hover { background: #2563eb; }
+
+    /* CARDS */
+    .card {
+      background: #fff; border-radius: 10px; padding: 1rem 1.25rem;
+      margin-bottom: .625rem; border: 1px solid var(--border);
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.07); border-color: #cbd5e1; }
+    .card-title { font-weight: 600; color: var(--navy); text-decoration: none; font-size: .9375rem; }
+    .card-title:hover { color: var(--blue); }
+    .meta { font-size: .8125rem; color: var(--muted); margin-top: .3rem; display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
+
+    /* BADGES */
+    .badge {
+      display: inline-flex; align-items: center;
+      font-size: .6875rem; font-weight: 600; letter-spacing: .02em;
+      padding: .15rem .5rem; border-radius: 4px; text-transform: uppercase;
+    }
+    .badge-cancelled { background: #fee2e2; color: #b91c1c; }
+    .badge-minutes   { background: #dcfce7; color: #166534; }
+    .badge-pdf   { background: #fee2e2; color: #b91c1c; }
+    .badge-docx,
+    .badge-doc   { background: #dbeafe; color: #1d4ed8; }
+    .badge-pptx,
+    .badge-ppt   { background: #ffedd5; color: #c2410c; }
+    .badge-xlsx,
+    .badge-xls   { background: #dcfce7; color: #166534; }
+    .badge-zip   { background: #f3e8ff; color: #7e22ce; }
+    .badge-html  { background: #fef9c3; color: #854d0e; }
+    .badge-txt,
+    .badge-bin   { background: #f1f5f9; color: #475569; }
+
+    /* STATS GRID */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card {
+      background: #fff; border: 1px solid var(--border); border-radius: 10px;
+      padding: 1.125rem 1.25rem;
+    }
+    .stat-card .num { font-size: 1.75rem; font-weight: 700; color: var(--navy); letter-spacing: -.03em; }
+    .stat-card .label { font-size: .8125rem; color: var(--muted); margin-top: .2rem; font-weight: 500; }
+
+    /* FILTERS */
+    .filters { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
+    .filters select, .filters input[type=text] {
+      padding: .5rem .75rem; border: 1.5px solid var(--border); border-radius: 7px;
+      font-size: .875rem; font-family: inherit; background: #fff; color: var(--text);
+      cursor: pointer; transition: border-color .15s;
+    }
+    .filters select:focus, .filters input:focus { outline: none; border-color: var(--blue); }
+    .filter-label { font-size: .8125rem; font-weight: 600; color: var(--muted); }
+
+    /* TABLE */
+    .table-wrap { background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background: var(--navy); color: #fff; padding: .65rem 1rem;
+      text-align: left; font-size: .8125rem; font-weight: 600;
+      letter-spacing: .03em; text-transform: uppercase;
+    }
+    td { padding: .65rem 1rem; font-size: .875rem; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+    td a { color: var(--navy); text-decoration: none; font-weight: 500; }
+    td a:hover { color: var(--blue); }
+
+    /* SECTION HEADER */
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
+    .count-label { font-size: .8125rem; color: var(--muted); font-weight: 500; }
+
+    /* DOC GROUP */
+    .doc-group { margin-bottom: 1.5rem; }
+    .doc-group h3 { margin-bottom: .5rem; color: var(--muted); font-size: .8125rem; text-transform: uppercase; letter-spacing: .05em; }
+
+    /* PILL TAGS */
+    .pill {
+      display: inline-flex; align-items: center; gap: .3rem;
+      font-size: .75rem; font-weight: 500; padding: .2rem .6rem;
+      border-radius: 99px; background: var(--light); color: var(--muted);
+      border: 1px solid var(--border); white-space: nowrap;
+    }
+
+    /* TYPE BAR */
+    .type-grid { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 2rem; }
+
+    /* SEARCH HIGHLIGHT */
+    mark { background: #fef08a; color: inherit; border-radius: 2px; padding: 0 2px; }
+
+    /* EMPTY */
+    .empty { color: var(--muted); font-style: italic; padding: 2rem 0; text-align: center; }
+
+    /* BREADCRUMB */
+    .breadcrumb { font-size: .8125rem; color: var(--muted); margin-bottom: .75rem; }
+    .breadcrumb a { color: var(--blue); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    /* FOOTER */
+    footer {
+      text-align: center; padding: 2rem; font-size: .8125rem; color: var(--muted);
+      border-top: 1px solid var(--border); margin-top: 3rem;
+    }
+
+    @media (max-width: 640px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      nav { gap: 1rem; padding: 0 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="nav-brand" href="{{ url_for('index') }}">ERCOT <span>Meeting Database</span></a>
+    <a href="{{ url_for('meetings') }}" {% if request.endpoint == 'meetings' %}class="active"{% endif %}>Meetings</a>
+    <a href="{{ url_for('search') }}"   {% if request.endpoint == 'search'   %}class="active"{% endif %}>Search</a>
+    <a href="{{ url_for('entities') }}" {% if request.endpoint in ('entities','entity') %}class="active"{% endif %}>Entities</a>
+  </nav>
+
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+
+  <footer>
+    ERCOT Meeting Database &mdash; data sourced from <a href="https://www.ercot.com/calendar" target="_blank" style="color:var(--blue)">ercot.com</a>
+  </footer>
+</body>
+</html>

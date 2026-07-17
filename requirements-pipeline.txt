@@ -1,0 +1,8 @@
+-r requirements.txt
+spacy
+PyMuPDF
+python-pptx
+python-docx
+openpyxl
+xlrd
+beautifulsoup4

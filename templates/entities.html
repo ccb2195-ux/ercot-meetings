@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Entities — ERCOT Meeting Database{% endblock %}
+{% block content %}
+
+<h1>Entities</h1>
+
+<div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem;">
+  {% for t in type_counts %}
+  <a href="{{ url_for('entities', type=t['entity_type']) }}"
+     style="text-decoration:none;">
+    <div style="background:{% if t['entity_type'] == selected_type %}var(--navy){% else %}#fff{% endif %};
+                color:{% if t['entity_type'] == selected_type %}#fff{% else %}var(--text){% endif %};
+                border:1px solid var(--border); border-radius:8px;
+                padding:.75rem 1.25rem; cursor:pointer;">
+      <div style="font-weight:700; font-size:1.1rem;">{{ t['unique_count'] }}</div>
+      <div style="font-size:.8125rem; opacity:.8;">
+        {% if t['entity_type'] == 'PERSON' %}People
+        {% elif t['entity_type'] == 'ORG' %}Organizations
+        {% elif t['entity_type'] == 'NPRR' %}NPRR Numbers
+        {% else %}{{ t['entity_type'] }}{% endif %}
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+<form method="get" style="display:flex; gap:.5rem; margin-bottom:1.25rem;">
+  <input type="hidden" name="type" value="{{ selected_type }}">
+  <input name="q" value="{{ q }}" placeholder="Filter by name..."
+         style="flex:1; padding:.6rem 1rem; border:1.5px solid var(--border);
+                border-radius:8px; font-size:.9375rem; font-family:inherit;">
+  <button type="submit"
+          style="padding:.6rem 1.2rem; background:var(--blue); color:#fff;
+                 border:none; border-radius:8px; font-weight:600; cursor:pointer;">
+    Filter
+  </button>
+  {% if q %}<a href="{{ url_for('entities', type=selected_type) }}"
+     style="padding:.6rem .9rem; color:var(--muted); text-decoration:none; align-self:center;">✕</a>{% endif %}
+</form>
+
+<div class="section-header">
+  <span class="count-label">
+    Top {{ entities|length }}
+    {% if selected_type == 'PERSON' %}people
+    {% elif selected_type == 'ORG' %}organizations
+    {% elif selected_type == 'NPRR' %}NPRR numbers
+    {% else %}entities{% endif %}
+    by document count
+  </span>
+  {% if admin_mode %}
+  <a href="{{ url_for('entity_blocked') }}"
+     style="font-size:.8125rem; color:var(--muted); text-decoration:none;">
+    Manage blocked →
+  </a>
+  {% endif %}
+</div>
+
+{% if entities %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th style="text-align:center;">Documents</th>
+        <th style="text-align:center;">Mentions</th>
+        {% if admin_mode %}<th style="width:80px;"></th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for e in entities %}
+    <tr>
+      <td>
+        <a href="{{ url_for('entity', name=e['entity_text']) }}?type={{ selected_type }}">
+          {{ e['entity_text'] }}
+        </a>
+      </td>
+      <td style="text-align:center; color:var(--muted);">{{ e['doc_count'] }}</td>
+      <td style="text-align:center; color:var(--muted);">{{ e['mention_count'] }}</td>
+      {% if admin_mode %}
+      <td>
+        <form method="post" action="{{ url_for('entity_block') }}" style="margin:0;">
+          <input type="hidden" name="name" value="{{ e['entity_text'] }}">
+          <input type="hidden" name="type" value="{{ e['entity_type'] }}">
+          <button type="submit"
+                  style="background:none; border:1px solid #e2e8f0; border-radius:5px;
+                         padding:.2rem .55rem; font-size:.75rem; color:#94a3b8;
+                         cursor:pointer; font-family:inherit;"
+                  title="Hide this entity from lists and charts"
+                  onclick="return confirm('Block {{ e['entity_text'] | replace("'", "\\'") }}?')">
+            ✕ Block
+          </button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="empty">No entities found — run <code>extract_entities.py</code> first.</p>
+{% endif %}
+
+{% endblock %}

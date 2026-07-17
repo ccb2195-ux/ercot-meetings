@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} — ERCOT Meeting Database{% endblock %}
+{% block content %}
+
+<div class="breadcrumb">
+  <a href="{{ url_for('entities', type=entity_type) }}">Entities</a> &rsaquo; {{ name }}
+</div>
+
+<h1>{{ name }}</h1>
+<p class="meta" style="margin-bottom:1.5rem;">
+  <span class="badge badge-{{ entity_type.lower() if entity_type else 'bin' }}">
+    {% if entity_type == 'PERSON' %}Person
+    {% elif entity_type == 'ORG' %}Organization
+    {% elif entity_type == 'NPRR' %}NPRR Number
+    {% else %}Entity{% endif %}
+  </span>
+  &nbsp;mentioned in {{ docs|length }} document{{ 's' if docs|length != 1 else '' }}
+</p>
+
+{% if docs %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Document</th>
+        <th>Meeting</th>
+        <th>Date</th>
+        <th style="text-align:center;">Mentions</th>
+        <th style="text-align:center;">View</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for d in docs %}
+    <tr>
+      <td>
+        <span class="badge badge-{{ d['url_ext'] }}" style="margin-right:.4rem;">{{ d['url_ext'].upper() }}</span>
+        {{ d['doc_title'] }}
+        {% if d['looks_like_minutes'] %}<span class="badge badge-minutes" style="margin-left:.3rem;">Minutes</span>{% endif %}
+      </td>
+      <td>
+        <a href="{{ url_for('meeting', slug=d['meeting_url'].split('/calendar/')[-1]) }}">
+          {{ d['meeting_title'] }}
+        </a>
+      </td>
+      <td style="white-space:nowrap; color:var(--muted);">{{ d['meeting_date'] }}</td>
+      <td style="text-align:center; color:var(--muted);">{{ d['mention_count'] }}</td>
+      <td style="text-align:center;">
+        {% if d['extraction_status'] == 'done' %}
+        <a href="{{ url_for('doc', doc_id=d['id']) }}"
+           style="color:var(--blue); text-decoration:none; font-size:.8125rem; font-weight:600;">
+          View →
+        </a>
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="empty">No documents found for this entity.</p>
+{% endif %}
+
+{% endblock %}
