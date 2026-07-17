@@ -195,12 +195,9 @@ def index():
 
 
 def fts_available(db):
-    row = db.execute(
+    return bool(db.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='document_fts'"
-    ).fetchone()
-    if not row:
-        return False
-    return db.execute("SELECT COUNT(*) FROM document_fts").fetchone()[0] > 0
+    ).fetchone())
 
 
 def _has_table(db, name):
