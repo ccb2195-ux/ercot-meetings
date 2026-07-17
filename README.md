@@ -10,6 +10,12 @@ The public database dosen't have the actual documents yet becuase it would ballo
 
 **Live site:** [ercot-meetings.onrender.com](https://ercot-meetings.onrender.com)
 
+**Limitations, Challenges, Future Fixes**
+
+The first real issue I ran into was parsing the PPTX files in a way that got the juciest information into the hands of researchers. Each pptx is full to the brim of graphics, photos, and charts showing big corperate plans for Texas power infrastructure. I tried using some huggingface models to slice out each image, then OCR it, but that became unwieldy really fast. so instead I've used python-pptx to grab every piece of available text on each slide, including speaker notes, and put it into a nicely formatted little database entry.
+
+The second issue is the lack of the source document in the public version of this db. I still don't really know how to fix this. 
+
 ---
 
 ## Methodology
