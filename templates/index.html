@@ -1,379 +1,325 @@
 {% extends "base.html" %}
-{% block title %}ERCOT Meeting Database{% endblock %}
-{% block content %}
+{% block title %}The ERCOT Record: Searchable ERCOT meeting documents{% endblock %}
+{% block head %}
 <style>
-  .viz-root {
-    --surface-1:      #fcfcfb;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted:     #898781;
-    --gridline:       #e1e0d9;
-    --s1: #2a78d6;
-    --s2: #1baf7a;
-    --s3: #eda100;
-    --s4: #008300;
-    --s5: #4a3aa7;
+  .lead { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 3.5rem; align-items: start; }
+  .lead .headline { font-size: clamp(2.1rem, 4.6vw, 3.25rem); }
+  .lead .search { margin-top: 1.5rem; }
+
+  .volume .big { font-family: var(--serif); font-size: 2.6rem; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+  .volume .big small { font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0; margin-left: .3rem; }
+  .volume .cap { font-size: 13px; color: var(--muted); margin: .35rem 0 1.1rem; }
+  .volume .key { display: flex; gap: 1rem; font-size: 11px; color: var(--muted); margin-top: .6rem; }
+  .volume .key i { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: .3rem; background: var(--ink); }
+  .volume .key i.p { background: repeating-linear-gradient(135deg, var(--rule-2) 0 3px, transparent 3px 6px); border: 1px solid var(--rule-2); }
+
+  .fresh { margin-top: 1.25rem; padding-top: .85rem; border-top: 1px solid var(--ink); }
+  .fresh-k { display: flex; align-items: center; gap: .45rem; margin-bottom: .1rem; }
+  .fresh-k::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--wire); animation: pulse 2.4s infinite; }
+  .fresh-k .since { margin-left: auto; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); }
+  .fresh-h { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: .6rem 0 0; }
+  .fresh-list { list-style: none; margin: 0; padding: 0; }
+  .fresh-list li { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem;
+                   padding: .32rem 0; border-bottom: 1px solid var(--rule); animation: slidein .5s cubic-bezier(.2,.7,.2,1) both; }
+  .fresh-list li:nth-child(2) { animation-delay: 80ms; }
+  .fresh-list li:nth-child(3) { animation-delay: 160ms; }
+  .fresh-list li:last-child { border-bottom: 0; }
+  .fresh-list a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                  font-family: var(--serif); font-size: 15px; font-weight: 600; text-decoration: none; }
+  .fresh-list a b { font-family: var(--sans); font-size: 12px; font-weight: 700; color: var(--wire); margin-right: .15rem; }
+  .fresh-list a:hover { color: var(--link); }
+  .fresh-list span { flex: none; font-size: 12px; color: var(--muted); }
+  @keyframes slidein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+  .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5rem; }
+
+  .spark-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1.5rem; }
+  .spark h4 { font-family: var(--sans); font-size: 14px; font-weight: 700; margin: 0 0 .1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .spark h4 a { text-decoration: none; }
+  .spark h4 a:hover { color: var(--link); }
+  .spark .last { font-size: 12px; color: var(--muted); margin-bottom: .4rem; }
+  .spark svg { width: 100%; height: 56px; overflow: visible; }
+  .spark .area { fill: var(--wire-bg); }
+  .spark .line { fill: none; stroke: var(--wire); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .spark .base { stroke: var(--rule-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .spark .axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: .25rem; }
+  .spark-row + .spark-row { margin-top: 2.25rem; }
+
+  .export { display: grid; grid-template-columns: 1fr auto; gap: 1.5rem 2rem; align-items: end; }
+  .export .out { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  .export .count { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; }
+  .export .count small { font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--muted); }
+  .warn { font-size: 12px; color: #b23a16; }
+
+  @media (max-width: 920px) {
+    .lead { grid-template-columns: 1fr; gap: 2rem; }
+    .spark-grid { grid-template-columns: repeat(3, 1fr); }
+    .three { grid-template-columns: 1fr; gap: 2rem; }
   }
-  @media (prefers-color-scheme: dark) {
-    .viz-root {
-      --surface-1:      #1a1a19;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #898781;
-      --gridline:       #2c2c2a;
-      --s1: #3987e5;
-      --s2: #199e70;
-      --s3: #c98500;
-      --s4: #008300;
-      --s5: #9085e9;
-    }
-  }
-  .viz-section { margin-bottom: 2rem; }
-  .viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-  .viz-card {
-    background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 10px; padding: 1.25rem;
-  }
-  .viz-card h3 { font-size: .9375rem; font-weight: 600; margin-bottom: .1rem; color: var(--text-primary, #0b0b0b); }
-  .viz-card .viz-sub { font-size: .8rem; color: var(--text-muted, #898781); margin-bottom: 1rem; }
   @media (max-width: 640px) {
-    .viz-grid { grid-template-columns: 1fr; }
+    .two { grid-template-columns: 1fr; gap: 2rem; }
+    .spark-grid { grid-template-columns: repeat(2, 1fr); }
+    .export { grid-template-columns: 1fr; }
   }
 </style>
+{% endblock %}
 
-<h1>ERCOT Meeting Database</h1>
+{% block content %}
 
-<div class="stats-grid">
-  <div class="stat-card">
-    <div class="num">{{ "{:,}".format(stats.meetings) }}</div>
-    <div class="label">Meetings</div>
+{# ───────────── Lead ───────────── #}
+<section class="lead">
+  <div>
+    <p class="kicker">The archive</p>
+    <h1 class="headline">Search what the Texas grid operator says in its own meetings</h1>
+    <p class="dek">
+      {{ "{:,}".format(stats.documents) }} agendas, slide decks, spreadsheets and minutes from
+      {{ "{:,}".format(stats.meetings) }} ERCOT meetings across {{ stats.committees }} committees,
+      indexed down to the speaker notes.
+    </p>
+
+    <form class="search" action="{{ url_for('search') }}" method="get" role="search">
+      <input name="q" placeholder="Try “data center” or “Oncor”" aria-label="Search every document" autofocus>
+      <button type="submit">Search</button>
+    </form>
+
+    {% if suggestions %}
+    <div class="chips">
+      <span class="label">Start here</span>
+      {% for s in suggestions %}
+      <a class="chip" href="{{ url_for('search', q=s.q) }}">{{ s.term }} <small>{{ "{:,}".format(s.n) }}</small></a>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
-  <div class="stat-card">
-    <div class="num">{{ "{:,}".format(stats.documents) }}</div>
-    <div class="label">Documents</div>
+
+  {# Monthly volume #}
+  {% if monthly %}
+  {% set mx = monthly | map(attribute='docs') | max %}
+  {% set partial = data_through and (data_through[8:10] | int) < 25 %}
+  <aside class="volume" aria-label="Documents posted per month">
+    <p class="kicker quiet" style="color:var(--muted)">Paper trail</p>
+    <div class="big">{{ "{:,}".format(stats.documents) }}<small>documents</small></div>
+    <p class="cap">posted per month, {{ monthly[0].month|apmonth }} to {{ monthly[-1].month|apmonth }}</p>
+    <div class="cols">
+      {% for m in monthly %}
+      <a class="c{{ ' partial' if loop.last and partial }}" href="{{ url_for('meetings', year=m.month[:4]) }}" aria-label="{{ m.month|apmonth }}: {{ m.docs }} documents">
+        <i style="height: {{ (m.docs / mx * 100) | round(1) if mx else 0 }}%; animation-delay: {{ loop.index0 * 25 }}ms"></i>
+        <span class="tip"><b>{{ m.month|apmonth }}</b><br>{{ "{:,}".format(m.docs) }} docs · {{ m.meetings }} meetings</span>
+      </a>
+      {% endfor %}
+    </div>
+    <div class="cols-axis">
+      {% for m in monthly %}<span>{% if m.month[5:7] == '01' or (loop.first and m.month[5:7] <= '06') %}{{ m.month[:4] }}{% endif %}</span>{% endfor %}
+    </div>
+    {% if partial %}<div class="key"><span><i></i>Full month</span><span><i class="p"></i>Partial, through {{ data_through|apdate(short=True) }}</span></div>{% endif %}
+
+    {% if newcomers and (newcomers.rules or newcomers.orgs) %}
+    <div class="fresh">
+      <p class="kicker fresh-k">New on the record <span class="since">since {{ newcomers.since|apdate(short=True) }}</span></p>
+      {% if newcomers.rules %}
+      <h3 class="fresh-h">Rule changes</h3>
+      <ul class="fresh-list">
+        {% for r in newcomers.rules %}
+        <li>
+          <a href="{{ url_for('entity', name=r.text) }}?type=NPRR" title="{{ r.text }}{% if r.title %}: {{ r.title }}{% endif %}. First seen {{ r.first_seen|apdate }}, in {{ r.meetings }} meetings since."><b>{{ r.text }}</b>{% if r.title %} {{ r.title }}{% endif %}</a>
+          <span>{{ r.meetings }} mtg{{ 's' if r.meetings != 1 }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if newcomers.orgs %}
+      <h3 class="fresh-h">First appearances</h3>
+      <ul class="fresh-list">
+        {% for o in newcomers.orgs %}
+        <li>
+          <a href="{{ url_for('entity', name=o.text) }}?type=ORG" title="First seen {{ o.first_seen|apdate }}">{{ o.label }}</a>
+          <span>{{ o.first_seen|apdate(short=True) }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endif %}
+  </aside>
+  {% endif %}
+</section>
+
+{# ───────────── Who comes up most ───────────── #}
+{% if has_entities and (top_orgs or top_people) %}
+<div class="section-head">
+  <h2>Who comes up most</h2>
+  <a class="more" href="{{ url_for('entities') }}">All names and organizations →</a>
+</div>
+<p class="section-note">Ranked by how many documents mention them. Names are tagged by software, so expect some noise.</p>
+
+<div class="two">
+  <div>
+    <h3 class="sub">Organizations</h3>
+    {% set omax = top_orgs[0]['doc_count'] if top_orgs else 1 %}
+    <ol class="ranked wire">
+      {% for e in top_orgs[:10] %}
+      <li>
+        <div class="row">
+          <a href="{{ url_for('entity', name=e['entity_text']) }}?type=ORG">{{ e['entity_text'] }}</a>
+          <span class="n">{{ "{:,}".format(e['doc_count']) }}</span>
+        </div>
+        <div class="track"><div class="fill" style="width: {{ (e['doc_count'] / omax * 100) | round(1) }}%; animation-delay: {{ loop.index0 * 40 }}ms"></div></div>
+      </li>
+      {% endfor %}
+    </ol>
   </div>
-  <div class="stat-card">
-    <div class="num">{{ stats.committees }}</div>
-    <div class="label">Committees</div>
-  </div>
-  <div class="stat-card">
-    <div class="num">{{ stats.minutes }}</div>
-    <div class="label">Minutes Files</div>
+  <div>
+    <h3 class="sub">People</h3>
+    {% set pmax = top_people[0]['doc_count'] if top_people else 1 %}
+    <ol class="ranked">
+      {% for e in top_people[:10] %}
+      <li>
+        <div class="row">
+          <a href="{{ url_for('entity', name=e['entity_text']) }}?type=PERSON">{{ e['entity_text'] }}</a>
+          <span class="n">{{ "{:,}".format(e['doc_count']) }}</span>
+        </div>
+        <div class="track"><div class="fill" style="width: {{ (e['doc_count'] / pmax * 100) | round(1) }}%; animation-delay: {{ loop.index0 * 40 }}ms"></div></div>
+      </li>
+      {% endfor %}
+    </ol>
   </div>
 </div>
 
-<form class="search-bar" action="{{ url_for('search') }}" method="get">
-  <input name="q" placeholder="Search documents by title..." autofocus>
-  <button type="submit">Search</button>
-</form>
+{# ───────────── Trend small multiples ───────────── #}
+{% macro sparks(trend, etype) %}
+  {% set ns = namespace(mx=1) %}
+  {% for s in trend.series %}{% for v in s.data %}{% if v > ns.mx %}{% set ns.mx = v %}{% endif %}{% endfor %}{% endfor %}
+  {% set W = 100 %}{% set H = 40 %}
+  <div class="spark-grid">
+    {% for s in trend.series %}
+    {% set n = s.data | length %}
+    {% set pts = namespace(p=[]) %}
+    {% for v in s.data %}{% set pts.p = pts.p + [((loop.index0 * W / (n - 1)) | round(2)) ~ ',' ~ ((H - v / ns.mx * H) | round(2))] %}{% endfor %}
+    <div class="spark">
+      <h4><a href="{{ url_for('entity', name=s.name) }}?type={{ etype }}" title="{{ s.name }}">{{ s.name }}</a></h4>
+      <div class="last">{{ s.data[-1] }} doc{{ 's' if s.data[-1] != 1 }} in {{ trend.months[-1]|apmonth }}</div>
+      <svg viewBox="0 -2 {{ W }} {{ H + 2 }}" preserveAspectRatio="none" role="img" aria-label="{{ s.name }}: {{ s.data | join(', ') }} documents per month">
+        <polygon class="area" points="0,{{ H }} {{ pts.p | join(' ') }} {{ W }},{{ H }}"/>
+        <line class="base" x1="0" y1="{{ H }}" x2="{{ W }}" y2="{{ H }}"/>
+        <polyline class="line" points="{{ pts.p | join(' ') }}"/>
+      </svg>
+      <div class="axis"><span>{{ trend.months[0]|apmonth }}</span><span>{{ trend.months[-1]|apmonth }}</span></div>
+    </div>
+    {% endfor %}
+  </div>
+{% endmacro %}
 
-<div class="type-grid">
+{% if org_trend.series or people_trend.series %}
+<div class="section-head">
+  <h2>Six-month trend</h2>
+</div>
+<p class="section-note">Documents per month that mention each name, on a shared scale. Top five in each group over the last six full months of data.</p>
+{% if org_trend.series %}<div class="spark-row"><h3 class="sub">Organizations</h3>{{ sparks(org_trend, 'ORG') }}</div>{% endif %}
+{% if people_trend.series %}<div class="spark-row"><h3 class="sub">People</h3>{{ sparks(people_trend, 'PERSON') }}</div>{% endif %}
+{% endif %}
+{% endif %}
+
+{# ───────────── Latest + what's inside ───────────── #}
+<div class="section-head">
+  <h2>Latest meetings</h2>
+  <a class="more" href="{{ url_for('meetings') }}">Every meeting →</a>
+</div>
+<ul class="river">
+  {% for m in recent %}
+  <li>
+    <div class="when">{{ m['date']|apdate }}</div>
+    <div class="what">
+      <a href="{{ url_for('meeting', slug=m['url'].split('/calendar/')[-1]) }}">{{ m['title'] }}</a>
+      <div class="who">{{ m['committee'] or 'ERCOT' }}</div>
+    </div>
+    <div class="count">{{ m['doc_count'] }} file{{ 's' if m['doc_count'] != 1 }}</div>
+  </li>
+  {% endfor %}
+</ul>
+
+{% set total = type_counts | sum(attribute='n') %}
+<div class="section-head">
+  <h2>What’s in the pile</h2>
+</div>
+<p class="section-note">Slide decks outnumber everything else. They’re where companies pitch ERCOT, and where ERCOT shows its own thinking.</p>
+<div class="stack" role="img" aria-label="Documents by file type">
   {% for t in type_counts %}
-  <a href="{{ url_for('search', type=t['url_ext']) }}" style="text-decoration:none;">
-    <span class="badge badge-{{ t['url_ext'] }}">{{ t['url_ext'].upper() }} &nbsp;{{ t['n'] }}</span>
-  </a>
+  <a class="t-{{ t['url_ext'] }}" style="flex: {{ t['n'] }}; background: var(--c, #b5a37a)" href="{{ url_for('search', type=t['url_ext']) }}" title="{{ t['url_ext'].upper() }}: {{ '{:,}'.format(t['n']) }}"></a>
+  {% endfor %}
+</div>
+<div class="legend">
+  {% for t in type_counts %}
+  <a href="{{ url_for('search', type=t['url_ext']) }}"><span class="ftype t-{{ t['url_ext'] }}">{{ t['url_ext'] }}</span><span class="n">{{ "{:,}".format(t['n']) }}{% if loop.index <= 3 %} ({{ (t['n'] / total * 100) | round | int }}%){% endif %}</span></a>
   {% endfor %}
 </div>
 
-<div style="background:#fff; border:1px solid var(--border); border-radius:10px; padding:1.25rem 1.5rem; margin-bottom:2rem;">
-  <h2 style="margin-bottom:1rem;">Export Dataset</h2>
-  <div class="filters" style="margin-bottom:1rem;">
-    <select id="f-committee">
-      <option value="">All committees</option>
-      {% for c in committees %}
-      <option value="{{ c['committee'] }}">{{ c['committee'] }}</option>
-      {% endfor %}
-    </select>
-    <select id="f-year">
-      <option value="">All years</option>
-      {% for y in years %}
-      <option value="{{ y['yr'] }}">{{ y['yr'] }}</option>
-      {% endfor %}
-    </select>
-    <select id="f-type">
-      <option value="">All types</option>
-      {% for t in type_counts %}
-      <option value="{{ t['url_ext'] }}">{{ t['url_ext'].upper() }}</option>
-      {% endfor %}
-    </select>
-    <label style="display:flex; align-items:center; gap:.4rem; font-size:.875rem; font-weight:500; cursor:pointer;">
-      <input type="checkbox" id="f-minutes"> Minutes only
+{# ───────────── Data download ───────────── #}
+<div class="section-head" id="data">
+  <h2>Take the data</h2>
+</div>
+<div class="panel export">
+  <div class="filters">
+    <label class="field"><span>Committee</span>
+      <select id="f-committee">
+        <option value="">All committees</option>
+        {% for c in committees %}{% if c['committee'] %}<option value="{{ c['committee'] }}">{{ c['committee'] }}</option>{% endif %}{% endfor %}
+      </select>
     </label>
+    <label class="field"><span>Year</span>
+      <select id="f-year">
+        <option value="">All years</option>
+        {% for y in years %}<option value="{{ y['yr'] }}">{{ y['yr'] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>File type</span>
+      <select id="f-type">
+        <option value="">All types</option>
+        {% for t in type_counts %}<option value="{{ t['url_ext'] }}">{{ t['url_ext'].upper() }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="check" style="align-self:flex-end; padding-bottom:.5rem"><input type="checkbox" id="f-minutes"> Minutes only</label>
   </div>
-
-  <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
-    <span id="export-count" style="font-size:.875rem; color:var(--muted); font-weight:500;">
-      — documents match
-    </span>
-    <a id="btn-csv" href="#"
-       style="padding:.5rem 1.1rem; background:var(--blue); color:#fff; border-radius:7px;
-              font-size:.875rem; font-weight:600; text-decoration:none;">
-      ↓ Download CSV
-    </a>
-    <a id="btn-zip" href="#"
-       style="padding:.5rem 1.1rem; background:var(--navy); color:#fff; border-radius:7px;
-              font-size:.875rem; font-weight:600; text-decoration:none;">
-      ↓ Download ZIP
-    </a>
-    <span id="zip-warning" style="font-size:.8125rem; color:#b45309; display:none;">
-      ⚠ Large set — ZIP may take a moment to build
-    </span>
+  <div class="out">
+    <span class="count"><span id="export-count">{{ "{:,}".format(stats.documents) }}</span> <small>documents</small></span>
+    <a id="btn-csv" class="btn" href="{{ url_for('download_csv') }}">Download CSV</a>
+    {% if serve_local %}<a id="btn-zip" class="btn btn-ghost" href="{{ url_for('download_zip') }}">ZIP of files</a>{% endif %}
+    <span id="zip-warning" class="warn" hidden>Big set. The ZIP takes a minute.</span>
   </div>
 </div>
+<p class="section-note" style="margin-top:.75rem">The CSV lists every document’s title, meeting, date, committee and a link to the original on ercot.com.</p>
 
 <script>
-  const fields = {
+(function () {
+  const f = {
     committee: document.getElementById('f-committee'),
     year:      document.getElementById('f-year'),
     type:      document.getElementById('f-type'),
     minutes:   document.getElementById('f-minutes'),
   };
-  const countEl   = document.getElementById('export-count');
-  const btnCsv    = document.getElementById('btn-csv');
-  const btnZip    = document.getElementById('btn-zip');
-  const zipWarn   = document.getElementById('zip-warning');
-
-  function buildParams() {
+  const countEl = document.getElementById('export-count');
+  const csv = document.getElementById('btn-csv');
+  const zip = document.getElementById('btn-zip');
+  const warn = document.getElementById('zip-warning');
+  function params() {
     const p = new URLSearchParams();
-    if (fields.committee.value) p.set('committee', fields.committee.value);
-    if (fields.year.value)      p.set('year',      fields.year.value);
-    if (fields.type.value)      p.set('type',      fields.type.value);
-    if (fields.minutes.checked) p.set('minutes',   '1');
+    if (f.committee.value) p.set('committee', f.committee.value);
+    if (f.year.value)      p.set('year', f.year.value);
+    if (f.type.value)      p.set('type', f.type.value);
+    if (f.minutes.checked) p.set('minutes', '1');
     return p;
   }
-
-  function updateLinks() {
-    const p = buildParams();
-    btnCsv.href = '/download/csv?' + p;
-    btnZip.href = '/download/zip?' + p;
-    fetch('/download/count?' + p)
-      .then(r => r.json())
-      .then(d => {
-        countEl.textContent = d.count.toLocaleString() + ' documents match';
-        zipWarn.style.display = d.count > 200 ? 'inline' : 'none';
-      });
+  function update() {
+    const p = params();
+    csv.href = '{{ url_for("download_csv") }}?' + p;
+    if (zip) zip.href = '{{ url_for("download_zip") }}?' + p;
+    fetch('{{ url_for("download_count") }}?' + p).then(r => r.json()).then(d => {
+      countEl.textContent = d.count.toLocaleString();
+      if (zip) warn.hidden = d.count <= 200;
+    });
   }
-
-  Object.values(fields).forEach(el => el.addEventListener('change', updateLinks));
-  updateLinks();
-</script>
-
-{% if has_entities %}
-<div class="viz-section viz-root">
-
-  <!-- Top people & orgs bar charts -->
-  <div class="viz-grid">
-    <div class="viz-card">
-      <h3>Top People</h3>
-      <p class="viz-sub">by number of documents mentioning them</p>
-      <canvas id="chart-people" height="260"></canvas>
-    </div>
-    <div class="viz-card">
-      <h3>Top Organizations</h3>
-      <p class="viz-sub">by number of documents mentioning them</p>
-      <canvas id="chart-orgs" height="260"></canvas>
-    </div>
-  </div>
-
-  <!-- Mentions over time -->
-  <div class="viz-card" style="margin-bottom:1rem;">
-    <h3>Top 5 Organizations — Monthly Mentions</h3>
-    <p class="viz-sub">documents per month referencing each organization, last 6 months</p>
-    <canvas id="chart-timeline" height="120"></canvas>
-  </div>
-
-  <!-- Top 5 people monthly trend -->
-  <div class="viz-card">
-    <h3>Top 5 People — Monthly Mentions</h3>
-    <p class="viz-sub">documents per month referencing each person, last 6 months</p>
-    <canvas id="chart-people-trend" height="120"></canvas>
-  </div>
-
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<script>
-(function() {
-  if (typeof Chart === 'undefined') {
-    document.querySelector('.viz-section').innerHTML =
-      '<p style="color:var(--muted);padding:1rem;">Charts unavailable — could not load Chart.js (CDN unreachable?).</p>';
-    return;
-  }
-
-  const peopleLabels = {{ top_people | map(attribute='entity_text') | list | tojson }};
-  const peopleCounts = {{ top_people | map(attribute='doc_count')   | list | tojson }};
-  const orgLabels    = {{ top_orgs   | map(attribute='entity_text') | list | tojson }};
-  const orgCounts    = {{ top_orgs   | map(attribute='doc_count')   | list | tojson }};
-
-  if (!peopleLabels.length && !orgLabels.length) {
-    document.querySelector('.viz-section').innerHTML =
-      '<p style="color:var(--muted);padding:1rem;">No entity data yet — run <code>python extract_entities.py</code> to populate.</p>';
-    return;
-  }
-
-  const style   = getComputedStyle(document.querySelector('.viz-root'));
-  const PALETTE = ['--s1','--s2','--s3','--s4','--s5'].map(v => style.getPropertyValue(v).trim());
-  const C_PPL   = PALETTE[0];
-  const C_ORG   = PALETTE[4];
-  const GRID    = style.getPropertyValue('--gridline').trim();
-  const MUTED   = style.getPropertyValue('--text-muted').trim();
-  const PRI     = style.getPropertyValue('--text-primary').trim();
-
-  const baseOpts = {
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#94a3b8',
-        padding: 10, cornerRadius: 6,
-      },
-    },
-    scales: {
-      x: { grid: { color: GRID }, ticks: { color: MUTED, font: { size: 11 } }, border: { color: GRID } },
-      y: { grid: { display: false }, ticks: { color: MUTED, font: { size: 11 } }, border: { display: false } },
-    },
-  };
-
-  // People bar chart
-  new Chart(document.getElementById('chart-people'), {
-    type: 'bar',
-    data: {
-      labels: peopleLabels,
-      datasets: [{
-        data:  peopleCounts,
-        backgroundColor: C_PPL,
-        borderRadius: { topRight: 4, bottomRight: 4 },
-        borderSkipped: 'left',
-      }]
-    },
-    options: {
-      ...baseOpts,
-      indexAxis: 'y',
-      plugins: { ...baseOpts.plugins,
-        tooltip: { ...baseOpts.plugins.tooltip,
-          callbacks: { label: ctx => ` ${ctx.raw} document${ctx.raw !== 1 ? 's' : ''}` }
-        }
-      },
-      scales: {
-        x: { ...baseOpts.scales.x, beginAtZero: true,
-             ticks: { ...baseOpts.scales.x.ticks, precision: 0 } },
-        y: { ...baseOpts.scales.y, ticks: { color: MUTED, font: { size: 11 },
-             callback: function(v) { const l = this.getLabelForValue(v); return l && l.length > 22 ? l.slice(0,20)+'…' : l; } } },
-      },
-    },
-  });
-
-  // Orgs bar chart
-  new Chart(document.getElementById('chart-orgs'), {
-    type: 'bar',
-    data: {
-      labels: orgLabels,
-      datasets: [{
-        data:  orgCounts,
-        backgroundColor: C_ORG,
-        borderRadius: { topRight: 4, bottomRight: 4 },
-        borderSkipped: 'left',
-      }]
-    },
-    options: {
-      ...baseOpts,
-      indexAxis: 'y',
-      plugins: { ...baseOpts.plugins,
-        tooltip: { ...baseOpts.plugins.tooltip,
-          callbacks: { label: ctx => ` ${ctx.raw} document${ctx.raw !== 1 ? 's' : ''}` }
-        }
-      },
-      scales: {
-        x: { ...baseOpts.scales.x, beginAtZero: true,
-             ticks: { ...baseOpts.scales.x.ticks, precision: 0 } },
-        y: { ...baseOpts.scales.y, ticks: { color: MUTED, font: { size: 11 },
-             callback: function(v) { const l = this.getLabelForValue(v); return l && l.length > 22 ? l.slice(0,20)+'…' : l; } } },
-      },
-    },
-  });
-
-  // Shared month formatter
-  const MO_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  function fmtMonths(months) {
-    return months.map(m => { const [y,mo]=m.split('-'); return MO_NAMES[parseInt(mo)-1]+' '+y; });
-  }
-
-  // Top-5 org monthly trend chart
-  const orgTrend = {{ org_trend | tojson }};
-  new Chart(document.getElementById('chart-timeline'), {
-    type: 'line',
-    data: {
-      labels: fmtMonths(orgTrend.months),
-      datasets: orgTrend.series.map((s, i) => ({
-        label: s.name,
-        data: s.data,
-        borderColor: PALETTE[i],
-        backgroundColor: PALETTE[i] + '22',
-        borderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
-        tension: 0.3, fill: false,
-      })),
-    },
-    options: {
-      ...baseOpts,
-      plugins: {
-        ...baseOpts.plugins,
-        legend: {
-          display: true, position: 'top', align: 'end',
-          labels: { color: PRI, boxWidth: 12, boxHeight: 12,
-                    padding: 16, font: { size: 12 } },
-        },
-        tooltip: { ...baseOpts.plugins.tooltip, mode: 'index', intersect: false },
-      },
-    },
-  });
-  // Top-5 people monthly trend chart
-  const peopleTrend = {{ people_trend | tojson }};
-  new Chart(document.getElementById('chart-people-trend'), {
-    type: 'line',
-    data: {
-      labels: fmtMonths(peopleTrend.months),
-      datasets: peopleTrend.series.map((s, i) => ({
-        label: s.name,
-        data: s.data,
-        borderColor: PALETTE[i],
-        backgroundColor: PALETTE[i] + '22',
-        borderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
-        tension: 0.3, fill: false,
-      })),
-    },
-    options: {
-      ...baseOpts,
-      plugins: {
-        ...baseOpts.plugins,
-        legend: {
-          display: true, position: 'top', align: 'end',
-          labels: { color: PRI, boxWidth: 12, boxHeight: 12,
-                    padding: 16, font: { size: 12 } },
-        },
-        tooltip: { ...baseOpts.plugins.tooltip, mode: 'index', intersect: false },
-      },
-    },
-  });
+  Object.values(f).forEach(el => el.addEventListener('change', update));
 })();
 </script>
-{% endif %}
-
-<div class="section-header">
-  <h2>Recent Meetings</h2>
-  <a href="{{ url_for('meetings') }}" style="font-size:.875rem; color:var(--blue); text-decoration:none;">View all →</a>
-</div>
-
-{% for m in recent %}
-<div class="card">
-  <a class="card-title" href="{{ url_for('meeting', slug=m['url'].split('/calendar/')[-1]) }}">
-    {{ m['title'] }}
-  </a>
-  <div class="meta">
-    <span>{{ m['date'] }}</span>
-    <span class="pill">{{ m['committee'] }}</span>
-    <span>{{ m['doc_count'] }} document{{ 's' if m['doc_count'] != 1 else '' }}</span>
-  </div>
-</div>
-{% endfor %}
 
 {% endblock %}

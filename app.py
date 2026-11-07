@@ -4,9 +4,11 @@ import json
 import os
 import sqlite3
 import zipfile
-from datetime import date
+from datetime import date, timedelta
 
 from flask import Flask, Response, g, redirect, render_template, request, send_from_directory, url_for
+
+from newcomers import find_newcomers
 
 app = Flask(__name__)
 DB_PATH = os.environ.get("DB_PATH", "ercot.db")
@@ -14,6 +16,73 @@ SERVE_LOCAL = (
     os.environ.get("SERVE_LOCAL_DOCS", "true").lower() == "true"
     and os.path.isdir("docs")
 )
+
+
+AP_MONTHS = ["Jan.", "Feb.", "March", "April", "May", "June",
+             "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."]
+
+# Searches suggested on the homepage. Counts are computed live.
+SUGGESTED_SEARCHES = [
+    "data center", "large load", "Data Center Coalition",
+    "NVIDIA", "crypto", "nuclear", "winter storm", "hydrogen",
+]
+
+
+@app.template_filter("apdate")
+def apdate(value, short=False):
+    """'2026-07-09' -> 'July 9, 2026' (AP style). short=True drops the year."""
+    try:
+        y, m, d = (int(x) for x in str(value)[:10].split("-"))
+    except (ValueError, TypeError):
+        return value or ""
+    out = f"{AP_MONTHS[m - 1]} {d}"
+    return out if short else f"{out}, {y}"
+
+
+@app.template_filter("apmonth")
+def apmonth(value):
+    """'2026-07' -> 'July 2026'."""
+    try:
+        y, m = (int(x) for x in str(value)[:7].split("-"))
+    except (ValueError, TypeError):
+        return value or ""
+    return f"{AP_MONTHS[m - 1]} {y}"
+
+
+@app.template_filter("filesize")
+def filesize(n):
+    if not n:
+        return "—"
+    return f"{n / 1048576:.1f} MB" if n >= 1048576 else f"{n / 1024:.0f} KB"
+
+
+@app.template_filter("etype")
+def etype_label(t, plural=False):
+    labels = {"PERSON": ("Person", "People"), "ORG": ("Organization", "Organizations"),
+              "NPRR": ("NPRR", "NPRRs")}
+    pair = labels.get(t, ("Entity", "Entities"))
+    return pair[1] if plural else pair[0]
+
+
+def latest_data_date(db):
+    """Date of the newest meeting that actually has files.
+
+    The calendar scrape also picks up meetings scheduled later in the month,
+    which have no documents yet. Counting those would make the site claim
+    data it doesn't have and drag every chart's last month toward zero."""
+    try:
+        d = db.execute("SELECT MAX(meeting_date) FROM documents").fetchone()[0]
+        if not d:
+            d = db.execute("SELECT MAX(date) FROM meetings").fetchone()[0]
+        return d[:10] if d else None
+    except sqlite3.Error:
+        return None
+
+
+@app.context_processor
+def inject_globals():
+    return {"data_through": latest_data_date(get_db()), "serve_local": SERVE_LOCAL,
+            "today": date.today().isoformat()}
 
 
 def get_db():
@@ -45,8 +114,9 @@ def index():
            LEFT JOIN documents d ON d.meeting_url = m.url
            WHERE m.status != 'cancelled'
            GROUP BY m.url
+           HAVING doc_count > 0
            ORDER BY m.date DESC
-           LIMIT 10"""
+           LIMIT 8"""
     ).fetchall()
     stats = {
         "meetings":   db.execute("SELECT COUNT(*) FROM meetings").fetchone()[0],
@@ -95,11 +165,18 @@ def index():
                GROUP BY e.entity_text ORDER BY doc_count DESC LIMIT 12"""
         ).fetchall()
 
-        # Build the last-6-months label list
-        today = date.today()
+        # Build the 6-month window ending at the LATEST MONTH IN THE DATA,
+        # not today's date. The DB is published monthly and can lag the
+        # calendar, which used to leave the trend charts mostly empty.
+        latest = latest_data_date(db)
+        anchor = date.fromisoformat(latest[:10]) if latest else date.today()
+        # If the newest month is only partly scraped, end on the month before
+        # so the trend lines don't all fake a nosedive.
+        if anchor.day < 25:
+            anchor = anchor.replace(day=1) - timedelta(days=1)
         months = []
         for i in range(5, -1, -1):
-            m, y = today.month - i, today.year
+            m, y = anchor.month - i, anchor.year
             while m <= 0:
                 m += 12; y -= 1
             months.append(f"{y}-{m:02d}")
@@ -186,12 +263,68 @@ def index():
                 for name in top5_ppl_names
             ]
 
+    # Monthly volume for the homepage strip chart: 24 consecutive months
+    # ending with the latest month that has files. Empty months stay in
+    # as zero-height bars so gaps in the record are visible, not hidden.
+    through = latest_data_date(db) or date.today().isoformat()
+    end = date.fromisoformat(through[:10])
+    first = db.execute("SELECT MIN(date) FROM meetings").fetchone()[0]
+    span = []
+    y, m = end.year, end.month
+    for _ in range(24):
+        key = f"{y}-{m:02d}"
+        if first and key < first[:7]:
+            break
+        span.append(key)
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+    span.reverse()
+    counts = {r["month"]: r for r in db.execute(
+        """SELECT substr(m.date,1,7) AS month,
+                  COUNT(DISTINCT m.url) AS meetings,
+                  COUNT(d.id)           AS docs
+           FROM meetings m
+           LEFT JOIN documents d ON d.meeting_url = m.url
+           WHERE m.date >= ? AND m.date <= ?
+           GROUP BY month""",
+        ((span[0] + "-01") if span else "0000", through),
+    ).fetchall()}
+    monthly = [{"month": k,
+                "meetings": counts[k]["meetings"] if k in counts else 0,
+                "docs": counts[k]["docs"] if k in counts else 0} for k in span]
+
+    # Suggested searches with live hit counts (FTS only)
+    suggestions = []
+    if fts_available(db):
+        for term in SUGGESTED_SEARCHES:
+            fts_q = f'"{term}"'
+            try:
+                n = db.execute(
+                    "SELECT COUNT(*) FROM document_fts WHERE document_fts MATCH ?", (fts_q,)
+                ).fetchone()[0]
+            except sqlite3.Error:
+                n = 0
+            if n:
+                suggestions.append({"term": term, "q": fts_q if " " in term else term, "n": n})
+
+    latest_month = monthly[-1]["month"] if monthly else None
+
+    newcomers = None
+    if has_entities:
+        try:
+            newcomers = find_newcomers(db, DB_PATH, window_days=90, n_orgs=3, n_rules=3)
+        except sqlite3.Error:
+            newcomers = None
+
     return render_template("index.html", recent=recent, stats=stats,
                            type_counts=type_counts, top_committees=top_committees,
                            committees=committees, years=years,
                            top_people=top_people, top_orgs=top_orgs,
                            org_trend=org_trend, people_trend=people_trend,
-                           has_entities=has_entities)
+                           has_entities=has_entities, monthly=monthly,
+                           suggestions=suggestions, latest_month=latest_month,
+                           newcomers=newcomers)
 
 
 def fts_available(db):
@@ -245,8 +378,7 @@ def search():
                 text_join    = ""
 
             used_fts = True
-            results = db.execute(
-                f"""SELECT d.*,
+            sql = f"""SELECT d.*,
                            m.title AS meeting_title,
                            {snippet_expr} AS snippet
                     FROM document_fts
@@ -256,9 +388,14 @@ def search():
                     WHERE document_fts MATCH ?
                     {extra_where}
                     ORDER BY rank
-                    LIMIT 200""",
-                [q] + extra_params,
-            ).fetchall()
+                    LIMIT 200"""
+            try:
+                results = db.execute(sql, [q] + extra_params).fetchall()
+            except sqlite3.OperationalError:
+                # Punctuation like - : ' ( breaks FTS5 query syntax.
+                # Retry the whole thing as a literal phrase.
+                safe_q = '"' + q.replace('"', '""') + '"'
+                results = db.execute(sql, [safe_q] + extra_params).fetchall()
         else:
             # Fallback: title-only LIKE search
             clauses = []
@@ -318,8 +455,13 @@ def meetings():
         "SELECT DISTINCT substr(date,1,4) as yr FROM meetings ORDER BY yr DESC"
     ).fetchall()
 
+    month_counts = {}
+    for r in rows:
+        month_counts[r["date"][:7]] = month_counts.get(r["date"][:7], 0) + 1
+
     return render_template("meetings.html", meetings=rows, committees=committees,
-                           years=years, selected=committee, selected_year=year)
+                           years=years, selected=committee, selected_year=year,
+                           month_counts=month_counts)
 
 
 @app.route("/doc/<int:doc_id>")
@@ -351,7 +493,9 @@ def doc(doc_id):
 
     ents = db.execute(
         """SELECT entity_text, entity_type, count
-           FROM entities WHERE document_id = ?
+           FROM entities e WHERE document_id = ?
+             AND NOT EXISTS (SELECT 1 FROM entity_blocklist bl
+                 WHERE bl.entity_text=e.entity_text AND bl.entity_type=e.entity_type)
            ORDER BY entity_type, count DESC""",
         (doc_id,),
     ).fetchall()
@@ -372,6 +516,13 @@ def meeting(slug):
         "SELECT * FROM documents WHERE meeting_url = ? ORDER BY url_ext, doc_title",
         (url,),
     ).fetchall()
+
+    # Natural sort so agenda numbers run 1, 2, ... 10 instead of 1, 10, 11, 2
+    import re
+    def natural(d):
+        return [int(t) if t.isdigit() else t.lower()
+                for t in re.split(r"(\d+)", d["doc_title"] or "")]
+    docs = sorted(docs, key=lambda d: (d["url_ext"], natural(d)))
 
     # Group docs by type for display
     by_type = {}
@@ -524,7 +675,58 @@ def entity(name):
         (name, entity_type, entity_type),
     ).fetchall()
 
-    return render_template("entity.html", name=name, docs=docs, entity_type=entity_type)
+    # Docs over time across the whole archive, for the timeline strip.
+    # Monthly bars while that fits; quarterly or yearly once backfills
+    # stretch the archive past ~3 years, so bars stay readable. The range is
+    # continuous, so months with no meetings show as gaps instead of vanishing.
+    through = latest_data_date(db) or date.today().isoformat()
+    first = db.execute("SELECT MIN(date) FROM meetings").fetchone()[0] or through
+    all_months = []
+    y, m = int(first[:4]), int(first[5:7])
+    while f"{y}-{m:02d}" <= through[:7]:
+        all_months.append(f"{y}-{m:02d}")
+        m += 1
+        if m == 13:
+            m, y = 1, y + 1
+    if len(all_months) <= 40:
+        bucket, unit = (lambda m: m), "month"
+    elif len(all_months) <= 120:
+        bucket, unit = (lambda m: f"{m[:4]}-Q{(int(m[5:7]) - 1) // 3 + 1}"), "quarter"
+    else:
+        bucket, unit = (lambda m: m[:4]), "year"
+    buckets = list(dict.fromkeys(bucket(m) for m in all_months))
+    per = {}
+    for d in docs:
+        m = (d["meeting_date"] or "")[:7]
+        if len(m) == 7:
+            per[bucket(m)] = per.get(bucket(m), 0) + 1
+
+    # Axis labels: one per year, placed where the year starts.
+    def axis_label(i, b):
+        year_start = (unit == "year") or b.endswith(("-01", "-Q1"))
+        if unit == "year":
+            return b if (len(buckets) <= 12 or i % 2 == 0) else ""
+        if year_start:
+            return b[:4]
+        if i == 0:
+            # Label the first bar only if the next year label is far enough away.
+            nxt = next((j for j, x in enumerate(buckets) if x.endswith(("-01", "-Q1"))), len(buckets))
+            if nxt >= (4 if unit == "month" else 3):
+                return apmonth(b) if unit == "month" else f"{b[5:]} {b[:4]}"
+        return ""
+
+    timeline = [{"key": b, "n": per.get(b, 0), "axis": axis_label(i, b)}
+                for i, b in enumerate(buckets)]
+
+    # Committees where this name shows up most
+    by_committee = {}
+    for d in docs:
+        by_committee[d["committee"] or "Other"] = by_committee.get(d["committee"] or "Other", 0) + 1
+    top_committees = sorted(by_committee.items(), key=lambda kv: -kv[1])[:5]
+
+    return render_template("entity.html", name=name, docs=docs, entity_type=entity_type,
+                           timeline=timeline, timeline_unit=unit,
+                           top_committees=top_committees)
 
 
 @app.route("/entities/block", methods=["POST"])

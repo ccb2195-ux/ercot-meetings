@@ -1,64 +1,109 @@
 {% extends "base.html" %}
-{% block title %}{{ name }} — ERCOT Meeting Database{% endblock %}
+{% block title %}{{ name }} | The ERCOT Record{% endblock %}
+{% block head %}
+<style>
+  .en-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 3.5rem; align-items: start; margin-top: 2rem; }
+  .en-time { margin-top: 1.75rem; max-width: 820px; }
+  .en-time .cols { height: 70px; }
+  .en-time .cols .c i { background: var(--wire); }
+  .en-time .cols .c.z i { background: var(--rule); height: 2px !important; }
+  .en-side h3 { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 .6rem; padding-bottom: .4rem; border-bottom: 1px solid var(--rule); }
+  .en-side ol { list-style: none; padding: 0; margin: 0; }
+  .en-side li { display: flex; justify-content: space-between; gap: 1rem; font-size: 14px; padding: .4rem 0; border-bottom: 1px solid var(--rule); }
+  .en-side li a { text-decoration: none; }
+  .en-side li a:hover { color: var(--link); }
+  .en-side li span { color: var(--muted); font-size: 13px; }
+
+  .en-docs { list-style: none; margin: 0; padding: 0; }
+  .en-docs li { padding: 1rem 0; border-bottom: 1px solid var(--rule); }
+  .en-docs .crumb { font-size: 12px; color: var(--muted); display: flex; gap: .3rem .9rem; flex-wrap: wrap; align-items: center; margin-bottom: .25rem; }
+  .en-docs .crumb a { color: var(--ink-2); font-weight: 600; text-decoration: none; }
+  .en-docs .crumb a:hover { color: var(--link); }
+  .en-docs h4 { font-family: var(--serif); font-size: 1.15rem; font-weight: 600; margin: 0; line-height: 1.3; }
+  .en-docs h4 a { text-decoration: none; }
+  .en-docs h4 a:hover { color: var(--link); }
+  .en-docs .x { font-size: 13px; color: var(--muted); margin-left: .35rem; font-family: var(--sans); font-weight: 500; }
+  .en-docs.capped li:nth-child(n+41) { display: none; }
+  @media (max-width: 900px) { .en-grid { grid-template-columns: 1fr; gap: 2rem; } }
+</style>
+{% endblock %}
+
 {% block content %}
+<header style="max-width: 820px">
+  <p class="kicker">
+    <a href="{{ url_for('entities', type=entity_type or 'PERSON') }}">{{ entity_type|etype(plural=True) if entity_type else 'Names' }}</a>
+  </p>
+  <h1 class="headline">{{ name }}</h1>
+  {% set total_mentions = docs | sum(attribute='mention_count') %}
+  <p class="dek" style="font-size:1.15rem">
+    Named in <strong>{{ "{:,}".format(docs|length) }}</strong> document{{ 's' if docs|length != 1 }}{% if total_mentions > docs|length %},
+    <strong>{{ "{:,}".format(total_mentions) }}</strong> times in all{% endif %}{% if docs %}, from {{ docs[-1]['meeting_date']|apdate }} to {{ docs[0]['meeting_date']|apdate }}{% endif %}.
+  </p>
+  <p class="byline">
+    <a class="link" href="{{ url_for('search', q='"' ~ name ~ '"') }}">Search the full text for “{{ name }}” →</a>
+  </p>
+</header>
 
-<div class="breadcrumb">
-  <a href="{{ url_for('entities', type=entity_type) }}">Entities</a> &rsaquo; {{ name }}
-</div>
-
-<h1>{{ name }}</h1>
-<p class="meta" style="margin-bottom:1.5rem;">
-  <span class="badge badge-{{ entity_type.lower() if entity_type else 'bin' }}">
-    {% if entity_type == 'PERSON' %}Person
-    {% elif entity_type == 'ORG' %}Organization
-    {% elif entity_type == 'NPRR' %}NPRR Number
-    {% else %}Entity{% endif %}
-  </span>
-  &nbsp;mentioned in {{ docs|length }} document{{ 's' if docs|length != 1 else '' }}
-</p>
-
-{% if docs %}
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>Document</th>
-        <th>Meeting</th>
-        <th>Date</th>
-        <th style="text-align:center;">Mentions</th>
-        <th style="text-align:center;">View</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for d in docs %}
-    <tr>
-      <td>
-        <span class="badge badge-{{ d['url_ext'] }}" style="margin-right:.4rem;">{{ d['url_ext'].upper() }}</span>
-        {{ d['doc_title'] }}
-        {% if d['looks_like_minutes'] %}<span class="badge badge-minutes" style="margin-left:.3rem;">Minutes</span>{% endif %}
-      </td>
-      <td>
-        <a href="{{ url_for('meeting', slug=d['meeting_url'].split('/calendar/')[-1]) }}">
-          {{ d['meeting_title'] }}
-        </a>
-      </td>
-      <td style="white-space:nowrap; color:var(--muted);">{{ d['meeting_date'] }}</td>
-      <td style="text-align:center; color:var(--muted);">{{ d['mention_count'] }}</td>
-      <td style="text-align:center;">
-        {% if d['extraction_status'] == 'done' %}
-        <a href="{{ url_for('doc', doc_id=d['id']) }}"
-           style="color:var(--blue); text-decoration:none; font-size:.8125rem; font-weight:600;">
-          View →
-        </a>
-        {% else %}—{% endif %}
-      </td>
-    </tr>
+{% macro tl_label(k) -%}
+  {%- if timeline_unit == 'month' -%}{{ k|apmonth }}
+  {%- elif timeline_unit == 'quarter' -%}{{ k[5:] }} {{ k[:4] }}
+  {%- else -%}{{ k }}{%- endif -%}
+{%- endmacro %}
+{% if timeline %}
+{% set mx = timeline | map(attribute='n') | max %}
+<section class="en-time" aria-label="Documents per {{ timeline_unit }}">
+  <div class="cols">
+    {% for t in timeline %}
+    <div class="c{{ ' z' if not t.n }}">
+      <i style="height: {{ (t.n / mx * 100) | round(1) if mx else 0 }}%; animation-delay: {{ [loop.index0 * 20, 800] | min }}ms"></i>
+      <span class="tip"><b>{{ tl_label(t.key) }}</b><br>{{ t.n }} document{{ 's' if t.n != 1 }}</span>
+    </div>
     {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<p class="empty">No documents found for this entity.</p>
+  </div>
+  <div class="cols-axis">
+    {% for t in timeline %}<span>{{ t.axis }}</span>{% endfor %}
+  </div>
+</section>
 {% endif %}
 
+<div class="en-grid">
+  <section>
+    <div class="section-head" style="margin-top:0"><h2>Every document</h2><span class="byline">Newest first</span></div>
+    {% if docs %}
+    <ol class="en-docs{{ ' capped' if docs|length > 40 }}" id="en-docs">
+      {% for d in docs %}
+      <li>
+        <div class="crumb">
+          <span class="ftype t-{{ d['url_ext'] }}">{{ d['url_ext'] }}</span>
+          <span>{{ d['meeting_date']|apdate }}</span>
+          <a href="{{ url_for('meeting', slug=d['meeting_url'].split('/calendar/')[-1]) }}">{{ d['meeting_title'] }}</a>
+          {% if d['looks_like_minutes'] %}<span class="flag flag-minutes">Minutes</span>{% endif %}
+        </div>
+        <h4>
+          {% if d['extraction_status'] == 'done' %}<a href="{{ url_for('doc', doc_id=d['id']) }}">{{ d['doc_title'] }}</a>{% else %}{{ d['doc_title'] }}{% endif %}
+          {% if d['mention_count'] > 1 %}<span class="x">{{ d['mention_count'] }} mentions</span>{% endif %}
+        </h4>
+      </li>
+      {% endfor %}
+    </ol>
+    {% if docs|length > 40 %}
+    <button class="btn btn-ghost no-print" style="margin-top:1rem" type="button"
+            onclick="document.getElementById('en-docs').classList.remove('capped'); this.remove();">Show all {{ "{:,}".format(docs|length) }} documents</button>
+    {% endif %}
+    {% else %}
+    <p class="empty">No documents found.</p>
+    {% endif %}
+  </section>
+
+  {% if top_committees %}
+  <aside class="en-side">
+    <h3>Where it comes up</h3>
+    <ol>
+      {% for c, n in top_committees %}
+      <li><a href="{{ url_for('meetings', committee=c) }}">{{ c }}</a><span>{{ n }}</span></li>
+      {% endfor %}
+    </ol>
+  </aside>
+  {% endif %}
+</div>
 {% endblock %}

@@ -1,104 +1,96 @@
 {% extends "base.html" %}
-{% block title %}Entities — ERCOT Meeting Database{% endblock %}
+{% block title %}Who’s in the room | The ERCOT Record{% endblock %}
+{% block head %}
+<style>
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--ink); margin: 1.75rem 0 1.25rem; overflow-x: auto; }
+  .tabs a { text-decoration: none; padding: .7rem 1.4rem .6rem 0; margin-right: 1.4rem; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+  .tabs a .n { display: block; font-family: var(--serif); font-size: 1.6rem; font-weight: 700; line-height: 1.1; color: var(--faint); }
+  .tabs a .l { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .tabs a:hover .n, .tabs a:hover .l { color: var(--ink); }
+  .tabs a.on { border-bottom-color: var(--wire); }
+  .tabs a.on .n, .tabs a.on .l { color: var(--ink); }
+
+  .e-tools { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .e-tools form { display: flex; gap: .5rem; }
+  .e-tools .input { width: 280px; }
+  .e-table .ebar { display: inline-block; height: 6px; background: var(--wire); border-radius: 1px; vertical-align: middle; margin-right: .5rem; }
+  .e-table.PERSON .ebar { background: var(--ink); }
+  .e-table.NPRR .ebar { background: var(--link); }
+  .e-table td.name a { font-size: 15px; }
+  .e-table td.rank { color: var(--faint); font-size: 12px; font-weight: 700; width: 2.5rem; }
+  .e-table .barcell { width: 38%; }
+  .blk { background: none; border: 1px solid var(--rule-2); border-radius: 2px; padding: .15rem .45rem; font: 12px var(--sans); color: var(--muted); cursor: pointer; }
+  .blk:hover { border-color: var(--wire); color: var(--wire); }
+  @media (max-width: 640px) { .e-table .barcell { display: none; } .e-tools .input { width: 100%; } .e-tools form { width: 100%; } }
+</style>
+{% endblock %}
+
 {% block content %}
-
-<h1>Entities</h1>
-
-<div style="display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1.5rem;">
-  {% for t in type_counts %}
-  <a href="{{ url_for('entities', type=t['entity_type']) }}"
-     style="text-decoration:none;">
-    <div style="background:{% if t['entity_type'] == selected_type %}var(--navy){% else %}#fff{% endif %};
-                color:{% if t['entity_type'] == selected_type %}#fff{% else %}var(--text){% endif %};
-                border:1px solid var(--border); border-radius:8px;
-                padding:.75rem 1.25rem; cursor:pointer;">
-      <div style="font-weight:700; font-size:1.1rem;">{{ t['unique_count'] }}</div>
-      <div style="font-size:.8125rem; opacity:.8;">
-        {% if t['entity_type'] == 'PERSON' %}People
-        {% elif t['entity_type'] == 'ORG' %}Organizations
-        {% elif t['entity_type'] == 'NPRR' %}NPRR Numbers
-        {% else %}{{ t['entity_type'] }}{% endif %}
-      </div>
-    </div>
-  </a>
-  {% endfor %}
+<div style="max-width: 760px">
+  <p class="kicker">Who’s in the room</p>
+  <h1 class="headline">The companies, people and rule changes that keep coming up</h1>
+  <p class="dek" style="font-size:1.1rem">Software read every document and pulled out names. It gets a lot right and some things wrong, like tagging acronyms as companies.
+    Treat this as a lead sheet, not a finding.</p>
 </div>
 
-<form method="get" style="display:flex; gap:.5rem; margin-bottom:1.25rem;">
-  <input type="hidden" name="type" value="{{ selected_type }}">
-  <input name="q" value="{{ q }}" placeholder="Filter by name..."
-         style="flex:1; padding:.6rem 1rem; border:1.5px solid var(--border);
-                border-radius:8px; font-size:.9375rem; font-family:inherit;">
-  <button type="submit"
-          style="padding:.6rem 1.2rem; background:var(--blue); color:#fff;
-                 border:none; border-radius:8px; font-weight:600; cursor:pointer;">
-    Filter
-  </button>
-  {% if q %}<a href="{{ url_for('entities', type=selected_type) }}"
-     style="padding:.6rem .9rem; color:var(--muted); text-decoration:none; align-self:center;">✕</a>{% endif %}
-</form>
-
-<div class="section-header">
-  <span class="count-label">
-    Top {{ entities|length }}
-    {% if selected_type == 'PERSON' %}people
-    {% elif selected_type == 'ORG' %}organizations
-    {% elif selected_type == 'NPRR' %}NPRR numbers
-    {% else %}entities{% endif %}
-    by document count
-  </span>
-  {% if admin_mode %}
-  <a href="{{ url_for('entity_blocked') }}"
-     style="font-size:.8125rem; color:var(--muted); text-decoration:none;">
-    Manage blocked →
+<nav class="tabs" aria-label="Entity type">
+  {% for t in type_counts %}
+  <a href="{{ url_for('entities', type=t['entity_type']) }}" class="{{ 'on' if t['entity_type'] == selected_type }}">
+    <span class="n">{{ "{:,}".format(t['unique_count']) }}</span>
+    <span class="l">{{ t['entity_type']|etype(plural=True) }}</span>
   </a>
-  {% endif %}
+  {% endfor %}
+</nav>
+
+<div class="e-tools">
+  <form method="get" role="search">
+    <input type="hidden" name="type" value="{{ selected_type }}">
+    <input class="input" name="q" value="{{ q }}" placeholder="Filter {{ selected_type|etype(plural=True)|lower }} by name" aria-label="Filter by name">
+    <button class="btn" type="submit">Filter</button>
+    {% if q %}<a class="clear" style="align-self:center;padding:0" href="{{ url_for('entities', type=selected_type) }}">Clear</a>{% endif %}
+  </form>
+  <span class="byline">
+    Top {{ entities|length }} by number of documents
+    {% if admin_mode %}<a class="link" href="{{ url_for('entity_blocked') }}">Manage blocked names →</a>{% endif %}
+  </span>
 </div>
 
 {% if entities %}
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th style="text-align:center;">Documents</th>
-        <th style="text-align:center;">Mentions</th>
-        {% if admin_mode %}<th style="width:80px;"></th>{% endif %}
-      </tr>
-    </thead>
-    <tbody>
-    {% for e in entities %}
+{% set mx = entities[0]['doc_count'] %}
+<table class="e-table {{ selected_type }}">
+  <thead>
     <tr>
-      <td>
-        <a href="{{ url_for('entity', name=e['entity_text']) }}?type={{ selected_type }}">
-          {{ e['entity_text'] }}
-        </a>
-      </td>
-      <td style="text-align:center; color:var(--muted);">{{ e['doc_count'] }}</td>
-      <td style="text-align:center; color:var(--muted);">{{ e['mention_count'] }}</td>
-      {% if admin_mode %}
-      <td>
-        <form method="post" action="{{ url_for('entity_block') }}" style="margin:0;">
-          <input type="hidden" name="name" value="{{ e['entity_text'] }}">
-          <input type="hidden" name="type" value="{{ e['entity_type'] }}">
-          <button type="submit"
-                  style="background:none; border:1px solid #e2e8f0; border-radius:5px;
-                         padding:.2rem .55rem; font-size:.75rem; color:#94a3b8;
-                         cursor:pointer; font-family:inherit;"
-                  title="Hide this entity from lists and charts"
-                  onclick="return confirm('Block {{ e['entity_text'] | replace("'", "\\'") }}?')">
-            ✕ Block
-          </button>
-        </form>
-      </td>
-      {% endif %}
+      <th class="sr-only">Rank</th>
+      <th>Name</th>
+      <th class="barcell"><span class="sr-only">Share</span></th>
+      <th class="num">Documents</th>
+      <th class="num">Mentions</th>
+      {% if admin_mode %}<th><span class="sr-only">Block</span></th>{% endif %}
     </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+  </thead>
+  <tbody>
+  {% for e in entities %}
+  <tr>
+    <td class="rank">{{ loop.index }}</td>
+    <td class="name"><a href="{{ url_for('entity', name=e['entity_text']) }}?type={{ selected_type }}">{{ e['entity_text'] }}</a></td>
+    <td class="barcell"><span class="ebar" style="width: {{ (e['doc_count'] / mx * 100) | round(1) }}%"></span></td>
+    <td class="num">{{ "{:,}".format(e['doc_count']) }}</td>
+    <td class="num muted">{{ "{:,}".format(e['mention_count']) }}</td>
+    {% if admin_mode %}
+    <td class="num">
+      <form method="post" action="{{ url_for('entity_block') }}" style="margin:0">
+        <input type="hidden" name="name" value="{{ e['entity_text'] }}">
+        <input type="hidden" name="type" value="{{ e['entity_type'] }}">
+        <button class="blk" type="submit" title="Hide this from lists and charts"
+                onclick="return confirm({{ ('Block ' ~ e['entity_text'] ~ '?') | tojson | forceescape }})">Block</button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
 {% else %}
-<p class="empty">No entities found — run <code>extract_entities.py</code> first.</p>
+<p class="empty">{% if q %}No names match “{{ q }}.”{% else %}No names extracted yet.{% endif %}</p>
 {% endif %}
-
 {% endblock %}

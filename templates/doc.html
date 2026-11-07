@@ -1,148 +1,146 @@
 {% extends "base.html" %}
-{% block title %}{{ doc['doc_title'] }} — ERCOT Minutes{% endblock %}
+{% block title %}{{ doc['doc_title'] }} | The ERCOT Record{% endblock %}
+{% block head %}
+<style>
+  .d-grid { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 3.5rem; align-items: start; }
+  .d-head { margin-bottom: 1.75rem; }
+  .d-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1.25rem; }
+
+  .reader-h { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--ink); padding-bottom: .45rem; margin-bottom: 1.25rem; }
+  .reader-h h2 { font-size: 14px; font-weight: 800; margin: 0; }
+  .reader-h span { font-size: 12px; color: var(--muted); }
+  .reader {
+    font-family: var(--serif); font-size: 1.08rem; line-height: 1.7; color: var(--ink);
+    white-space: pre-wrap; overflow-wrap: anywhere; max-width: var(--read);
+  }
+  .reader.clip { max-height: 70vh; overflow: hidden; position: relative; }
+  .reader.clip::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(to bottom, rgba(255,255,255,0), #fff); }
+  .more-btn { margin-top: .75rem; }
+  .teaser-note { margin-top: 1.5rem; }
+
+  .frame { width: 100%; height: 80vh; border: 1px solid var(--rule-2); border-radius: 3px; display: block; margin-bottom: 2rem; }
+
+  .side { position: sticky; top: 1.25rem; }
+  .side h3 { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 .6rem; padding-bottom: .4rem; border-bottom: 1px solid var(--rule); }
+  .side section + section { margin-top: 1.75rem; }
+  .tags { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .tag { text-decoration: none; font-size: 13px; padding: .2rem .55rem; border-radius: 2px; background: var(--wash); color: var(--ink-2); }
+  .tag:hover { background: var(--ink); color: #fff; }
+  .tag small { color: var(--faint); font-size: 11px; margin-left: .2rem; }
+  .tag:hover small { color: #bbb; }
+  .tags-org .tag { background: var(--wire-bg); }
+  .tags-org .tag:hover { background: var(--wire); color: #fff; }
+  .facts { margin: 0; font-size: 14px; display: grid; grid-template-columns: auto 1fr; gap: .35rem 1rem; }
+  .facts dt { color: var(--muted); font-size: 13px; }
+  .facts dd { margin: 0; }
+  .facts a { color: var(--link); text-decoration: none; }
+
+  .ocr { background: var(--wash); padding: 1.25rem; border-radius: 3px; margin-top: 2rem; }
+  @media (max-width: 900px) {
+    .d-grid { grid-template-columns: 1fr; gap: 2rem; }
+    .side { position: static; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-
-<div class="breadcrumb">
-  <a href="{{ url_for('meetings') }}">Meetings</a> &rsaquo;
-  <a href="{{ url_for('meeting', slug=doc['meeting_url'].split('/calendar/')[-1]) }}">{{ meeting['title'] if meeting else 'Meeting' }}</a> &rsaquo;
-  {{ doc['doc_title'][:60] }}{% if doc['doc_title']|length > 60 %}…{% endif %}
-</div>
-
-<h1>{{ doc['doc_title'] }}</h1>
-
-<div class="meta" style="margin-bottom:1.5rem;">
-  <span>{{ doc['meeting_date'] }}</span>
-  <span class="pill">{{ doc['committee'] }}</span>
-  <span class="badge badge-{{ doc['url_ext'] }}">{{ doc['url_ext'].upper() }}</span>
-  {% if doc['looks_like_minutes'] %}<span class="badge badge-minutes">Minutes</span>{% endif %}
-  {% if doc['size_bytes'] %}
-  <span>
-    {% if doc['size_bytes'] >= 1048576 %}{{ "%.1f MB"|format(doc['size_bytes']/1048576) }}
-    {% else %}{{ "%.0f KB"|format(doc['size_bytes']/1024) }}{% endif %}
-  </span>
-  {% endif %}
-  <a href="{{ doc['doc_url'] }}" target="_blank" style="color:var(--blue); text-decoration:none;">
-    Download original ↗
-  </a>
-</div>
-
-{% if doc['url_ext'] in ('docx', 'doc') and doc['extraction_status'] == 'done' and serve_local %}
-<h2 style="margin-bottom:.75rem;">Document</h2>
-<iframe src="{{ url_for('render_doc', doc_id=doc['id']) }}"
-        style="width:100%; height:80vh; border:1px solid var(--border); border-radius:10px; display:block; margin-bottom:1.5rem;">
-</iframe>
-
-{% elif doc['url_ext'] == 'pdf' and serve_local %}
-<h2 style="margin-bottom:.75rem;">Document</h2>
-<iframe src="{{ url_for('serve_doc', filename=doc['filename']) }}"
-        style="width:100%; height:80vh; border:1px solid var(--border); border-radius:10px; display:block; margin-bottom:1.5rem;">
-</iframe>
-
-{% elif body_text %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem;">
-  <h2>Extracted Text</h2>
-  <span class="count-label">{{ body_text|length|int }} characters</span>
-</div>
-<div style="
-  background:#fff; border:1px solid var(--border); border-radius:10px;
-  padding:1.5rem; white-space:pre-wrap; font-size:.875rem; line-height:1.75;
-  color:var(--text); max-height:600px; overflow-y:auto; font-family:inherit;
-  margin-bottom:1.5rem;
-">{{ body_text }}</div>
-
-{% elif doc['extraction_status'] == 'empty' %}
-<div class="card" style="color:var(--muted); text-align:center; padding:2rem;">
-  No text could be extracted from this file — it may be a scanned image document.
-</div>
-
-{% elif doc['extraction_status'].startswith('skipped') %}
-<div class="card" style="color:var(--muted); text-align:center; padding:2rem;">
-  Text extraction not supported for legacy {{ doc['url_ext'].upper() }} files yet.
-</div>
-
-{% else %}
-<div class="card" style="color:var(--muted); text-align:center; padding:2rem;">
-  Text not yet extracted. Run <code>extract_text.py</code> to index this document.
-</div>
-{% endif %}
-
-{% if doc['url_ext'] == 'pdf' and body_text and serve_local %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem;">
-  <h2>Extracted Text</h2>
-  <span class="count-label">{{ body_text|length|int }} characters</span>
-</div>
-<div style="
-  background:#fff; border:1px solid var(--border); border-radius:10px;
-  padding:1.5rem; white-space:pre-wrap; font-size:.875rem; line-height:1.75;
-  color:var(--text); max-height:400px; overflow-y:auto; font-family:inherit;
-  margin-bottom:1.5rem;
-">{{ body_text }}</div>
-{% endif %}
-
-{% set people = namespace(items=[]) %}
-{% set orgs   = namespace(items=[]) %}
-{% set nprrs  = namespace(items=[]) %}
-
-{% if doc['extraction_status'] == 'done' %}
-  {# entities are passed from the route — show inline tags #}
-  {% if entities %}
-  <div style="margin-bottom:1.5rem;">
-    {% if entities | selectattr('entity_type','equalto','PERSON') | list %}
-    <div style="margin-bottom:.6rem;">
-      <span style="font-size:.75rem; font-weight:700; text-transform:uppercase;
-                   letter-spacing:.05em; color:var(--muted); margin-right:.5rem;">People</span>
-      {% for e in entities %}{% if e.entity_type == 'PERSON' %}
-      <a href="{{ url_for('entity', name=e.entity_text) }}?type=PERSON"
-         style="display:inline-block; margin:.2rem .25rem; padding:.2rem .6rem;
-                background:#dbeafe; color:#1d4ed8; border-radius:4px;
-                font-size:.8rem; text-decoration:none; font-weight:500;">
-        {{ e.entity_text }} <span style="opacity:.6;">×{{ e.count }}</span>
-      </a>
-      {% endif %}{% endfor %}
-    </div>
-    {% endif %}
-    {% if entities | selectattr('entity_type','equalto','ORG') | list %}
-    <div style="margin-bottom:.6rem;">
-      <span style="font-size:.75rem; font-weight:700; text-transform:uppercase;
-                   letter-spacing:.05em; color:var(--muted); margin-right:.5rem;">Organizations</span>
-      {% for e in entities %}{% if e.entity_type == 'ORG' %}
-      <a href="{{ url_for('entity', name=e.entity_text) }}?type=ORG"
-         style="display:inline-block; margin:.2rem .25rem; padding:.2rem .6rem;
-                background:#f3e8ff; color:#7e22ce; border-radius:4px;
-                font-size:.8rem; text-decoration:none; font-weight:500;">
-        {{ e.entity_text }} <span style="opacity:.6;">×{{ e.count }}</span>
-      </a>
-      {% endif %}{% endfor %}
-    </div>
-    {% endif %}
-    {% if entities | selectattr('entity_type','equalto','NPRR') | list %}
-    <div style="margin-bottom:.6rem;">
-      <span style="font-size:.75rem; font-weight:700; text-transform:uppercase;
-                   letter-spacing:.05em; color:var(--muted); margin-right:.5rem;">NPRR Numbers</span>
-      {% for e in entities %}{% if e.entity_type == 'NPRR' %}
-      <a href="{{ url_for('entity', name=e.entity_text) }}?type=NPRR"
-         style="display:inline-block; margin:.2rem .25rem; padding:.2rem .6rem;
-                background:#dcfce7; color:#166534; border-radius:4px;
-                font-size:.8rem; text-decoration:none; font-weight:500;">
-        {{ e.entity_text }} <span style="opacity:.6;">×{{ e.count }}</span>
-      </a>
-      {% endif %}{% endfor %}
-    </div>
-    {% endif %}
+{% set mslug = doc['meeting_url'].split('/calendar/')[-1] %}
+<header class="d-head" style="max-width: 820px">
+  <p class="kicker">
+    <a href="{{ url_for('meeting', slug=mslug) }}">{{ doc['committee'] or 'ERCOT' }}</a><span class="sep">/</span>
+    <span class="quiet">{{ doc['meeting_date']|apdate }}</span>
+  </p>
+  <h1 class="headline" style="font-size:clamp(1.7rem,3.4vw,2.35rem)">{{ doc['doc_title'] }}</h1>
+  <p class="byline">
+    <span class="ftype t-{{ doc['url_ext'] }}">{{ doc['url_ext'] }}</span>
+    {% if doc['size_bytes'] %}<span>{{ doc['size_bytes']|filesize }}</span>{% endif %}
+    {% if doc['looks_like_minutes'] %}<span class="flag flag-minutes">Minutes</span>{% endif %}
+    <span>From <a class="link" href="{{ url_for('meeting', slug=mslug) }}">{{ meeting['title'] if meeting else 'this meeting' }}</a></span>
+  </p>
+  <div class="d-actions">
+    <a class="btn" href="{{ doc['doc_url'] }}" target="_blank" rel="noopener">Open the original ↗</a>
+    <a class="btn btn-ghost" href="{{ url_for('meeting', slug=mslug) }}">All files from this meeting</a>
   </div>
-  {% endif %}
-{% endif %}
+</header>
 
-{% if ocr_text %}
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.75rem;">
-  <h2>OCR — Slide Graphics</h2>
-  <span class="count-label">text extracted from embedded images</span>
+<div class="d-grid">
+  <article>
+    {% if doc['url_ext'] in ('docx', 'doc') and doc['extraction_status'] == 'done' and serve_local %}
+      <iframe class="frame" src="{{ url_for('render_doc', doc_id=doc['id']) }}" title="Document preview"></iframe>
+    {% elif doc['url_ext'] == 'pdf' and serve_local %}
+      <iframe class="frame" src="{{ url_for('serve_doc', filename=doc['filename']) }}" title="PDF preview"></iframe>
+    {% endif %}
+
+    {% if body_text %}
+      {% set is_teaser = not serve_local and body_text|length <= 300 %}
+      <div class="reader-h">
+        <h2>{% if is_teaser %}First lines{% else %}Text of the document{% endif %}</h2>
+        <span>{% if is_teaser %}preview{% else %}{{ "{:,}".format(body_text|length) }} characters, extracted automatically{% endif %}</span>
+      </div>
+      <div class="reader{{ ' clip' if body_text|length > 4000 }}" id="reader">{{ body_text }}</div>
+      {% if body_text|length > 4000 %}
+      <button class="btn btn-ghost more-btn no-print" type="button"
+              onclick="document.getElementById('reader').classList.remove('clip'); this.remove();">Show the full text</button>
+      {% endif %}
+      {% if is_teaser %}
+      <p class="note teaser-note">This public version keeps only the opening lines of each document so the database stays small.
+        Search still covers every word. <a class="link" href="{{ doc['doc_url'] }}" target="_blank" rel="noopener">Read the whole thing on ercot.com ↗</a></p>
+      {% endif %}
+    {% elif doc['extraction_status'] == 'empty' %}
+      <p class="note">No text came out of this file. It’s probably a scanned image or a chart-only deck. <a class="link" href="{{ doc['doc_url'] }}" target="_blank" rel="noopener">Open the original ↗</a></p>
+    {% elif doc['extraction_status'].startswith('skipped') %}
+      <p class="note">This is an older {{ doc['url_ext'].upper() }} file, and text extraction doesn’t handle that format yet. <a class="link" href="{{ doc['doc_url'] }}" target="_blank" rel="noopener">Open the original ↗</a></p>
+    {% else %}
+      <p class="note">This file hasn’t been processed yet.</p>
+    {% endif %}
+
+    {% if ocr_text %}
+    <div class="ocr">
+      <div class="reader-h"><h2>Text found in slide images</h2><span>OCR, expect typos</span></div>
+      <div class="reader" style="font-size:1rem">{{ ocr_text }}</div>
+    </div>
+    {% endif %}
+  </article>
+
+  <aside class="side">
+    {% if entities %}
+      {% set orgs = entities | selectattr('entity_type', 'equalto', 'ORG') | list %}
+      {% set ppl  = entities | selectattr('entity_type', 'equalto', 'PERSON') | list %}
+      {% set nprr = entities | selectattr('entity_type', 'equalto', 'NPRR') | list %}
+      {% if orgs %}
+      <section>
+        <h3>Organizations named</h3>
+        <div class="tags tags-org">
+          {% for e in orgs[:20] %}<a class="tag" href="{{ url_for('entity', name=e.entity_text) }}?type=ORG">{{ e.entity_text }}{% if e.count > 1 %}<small>×{{ e.count }}</small>{% endif %}</a>{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+      {% if ppl %}
+      <section>
+        <h3>People named</h3>
+        <div class="tags">
+          {% for e in ppl[:20] %}<a class="tag" href="{{ url_for('entity', name=e.entity_text) }}?type=PERSON">{{ e.entity_text }}{% if e.count > 1 %}<small>×{{ e.count }}</small>{% endif %}</a>{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+      {% if nprr %}
+      <section>
+        <h3>Protocol revisions</h3>
+        <div class="tags">
+          {% for e in nprr %}<a class="tag" href="{{ url_for('entity', name=e.entity_text) }}?type=NPRR">{{ e.entity_text }}</a>{% endfor %}
+        </div>
+      </section>
+      {% endif %}
+    {% endif %}
+    <section>
+      <h3>File</h3>
+      <dl class="facts">
+        <dt>Meeting</dt><dd>{{ doc['meeting_date']|apdate }}</dd>
+        <dt>Format</dt><dd>{{ doc['url_ext'].upper() }}</dd>
+        {% if doc['size_bytes'] %}<dt>Size</dt><dd>{{ doc['size_bytes']|filesize }}</dd>{% endif %}
+        <dt>Source</dt><dd><a href="{{ doc['doc_url'] }}" target="_blank" rel="noopener">ercot.com ↗</a></dd>
+      </dl>
+    </section>
+  </aside>
 </div>
-<div style="
-  background:#fffbeb; border:1px solid #fde68a; border-radius:10px;
-  padding:1.5rem; white-space:pre-wrap; font-size:.875rem; line-height:1.75;
-  color:var(--text); max-height:400px; overflow-y:auto; font-family:inherit;
-">{{ ocr_text }}</div>
-{% endif %}
-
 {% endblock %}

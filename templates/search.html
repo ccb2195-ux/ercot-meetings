@@ -1,77 +1,128 @@
 {% extends "base.html" %}
-{% block title %}Search — ERCOT Minutes{% endblock %}
+{% block title %}{% if q %}“{{ q }}”: {% endif %}Search | The ERCOT Record{% endblock %}
+{% block head %}
+<style>
+  .s-head { max-width: 760px; }
+  .s-filters { margin-top: 1rem; }
+  .s-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;
+            border-bottom: 1px solid var(--ink); padding-bottom: .6rem; margin: 2.25rem 0 0; }
+  .s-meta .tally { font-family: var(--serif); font-size: 1.35rem; font-weight: 600; }
+  .s-meta .tally em { font-style: italic; font-weight: 400; }
+  .s-meta .how { font-size: 12px; color: var(--muted); }
+
+  .hits { list-style: none; margin: 0; padding: 0; max-width: 820px; }
+  .hit { padding: 1.3rem 0; border-bottom: 1px solid var(--rule); }
+  .hit .crumb { font-size: 12px; color: var(--muted); display: flex; gap: .3rem .9rem; flex-wrap: wrap; align-items: center; margin-bottom: .35rem; }
+  .hit .crumb a { text-decoration: none; color: var(--ink-2); font-weight: 600; }
+  .hit .crumb a:hover { color: var(--link); }
+  .hit h3 { font-family: var(--serif); font-size: 1.3rem; font-weight: 600; line-height: 1.25; margin: 0; text-wrap: pretty; }
+  .hit h3 a { text-decoration: none; }
+  .hit h3 a:hover { color: var(--link); }
+  .hit .snip { font-family: var(--serif); font-size: 1rem; color: var(--ink-2); line-height: 1.55; margin: .45rem 0 0;
+               display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .hit .snip.teaser { color: var(--muted); }
+  .hit .snip.teaser::before { content: "Opens with: "; font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+  .hit .acts { margin-top: .5rem; display: flex; gap: 1.1rem; font-size: 13px; }
+  .hit .acts a { color: var(--link); text-decoration: none; font-weight: 600; }
+  .hit .acts a:hover { text-decoration: underline; }
+
+  .tips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-top: 2.5rem; }
+  .tips h4 { font-size: 13px; font-weight: 700; margin: 0 0 .35rem; }
+  .tips p { font-size: 14px; color: var(--ink-2); margin: 0; }
+  .tips code { white-space: nowrap; }
+  .capped { font-size: 13px; color: var(--muted); margin-top: 1.25rem; }
+  @media (max-width: 720px) { .tips { grid-template-columns: 1fr; gap: 1.25rem; } }
+</style>
+{% endblock %}
+
 {% block content %}
+{% set active = q or type_filter or committee %}
 
-<h1>Search Documents</h1>
+<div class="s-head">
+  <p class="kicker">Search</p>
+  <h1 class="headline" style="font-size:clamp(1.8rem,3.6vw,2.4rem)">{% if active %}Search the documents{% else %}What are you looking for?{% endif %}</h1>
 
-<form action="{{ url_for('search') }}" method="get">
-  <div class="search-bar">
-    <input name="q" value="{{ q }}" placeholder="Search by document title..." autofocus>
-    <button type="submit">Search</button>
+  <form action="{{ url_for('search') }}" method="get" role="search">
+    <div class="search">
+      <input name="q" value="{{ q }}" placeholder="A company, a person, an NPRR number, a phrase…" aria-label="Search terms" {% if not active %}autofocus{% endif %}>
+      <button type="submit">Search</button>
+    </div>
+    <div class="filters s-filters">
+      <label class="field"><span>File type</span>
+        <select name="type" onchange="this.form.submit()">
+          <option value="">All types</option>
+          {% for t in all_types %}
+          <option value="{{ t['url_ext'] }}" {% if t['url_ext'] == type_filter %}selected{% endif %}>{{ t['url_ext'].upper() }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="field"><span>Committee</span>
+        <select name="committee" onchange="this.form.submit()">
+          <option value="">All committees</option>
+          {% for c in all_committees %}{% if c['committee'] %}
+          <option value="{{ c['committee'] }}" {% if c['committee'] == committee %}selected{% endif %}>{{ c['committee'] }}</option>
+          {% endif %}{% endfor %}
+        </select>
+      </label>
+      {% if active %}<a class="clear" href="{{ url_for('search') }}">Clear all</a>{% endif %}
+    </div>
+  </form>
+</div>
+
+{% if active %}
+  <div class="s-meta">
+    <div class="tally">
+      {{ "{:,}".format(results|length) }}{% if results|length >= 200 %}+{% endif %} result{{ 's' if results|length != 1 }}
+      {% if q %}for <em>{{ q }}</em>{% endif %}
+    </div>
+    <div class="how">
+      {% if used_fts %}Searched the full text of every document, best matches first{% else %}Searched document titles only, newest first{% endif %}
+    </div>
   </div>
-  <div class="filters">
-    <span class="filter-label">Filter:</span>
-    <select name="type" onchange="this.form.submit()">
-      <option value="">All types</option>
-      {% for t in all_types %}
-      <option value="{{ t['url_ext'] }}" {% if t['url_ext'] == type_filter %}selected{% endif %}>
-        {{ t['url_ext'].upper() }}
-      </option>
-      {% endfor %}
-    </select>
-    <select name="committee" onchange="this.form.submit()">
-      <option value="">All committees</option>
-      {% for c in all_committees %}
-      <option value="{{ c['committee'] }}" {% if c['committee'] == committee %}selected{% endif %}>
-        {{ c['committee'] }}
-      </option>
-      {% endfor %}
-    </select>
-    {% if q or type_filter or committee %}
-    <a href="{{ url_for('search') }}" style="font-size:.8125rem; color:var(--muted); text-decoration:none;">✕ Clear</a>
-    {% endif %}
-  </div>
-</form>
-
-{% if q or type_filter or committee %}
-  <p class="count-label" style="margin-bottom:1rem;">
-    {{ results|length }} result{{ 's' if results|length != 1 else '' }}
-    {% if q %} for <strong>"{{ q }}"</strong>{% endif %}
-    {% if type_filter %} &mdash; type: <strong>{{ type_filter.upper() }}</strong>{% endif %}
-    {% if committee %} &mdash; committee: <strong>{{ committee }}</strong>{% endif %}
-  </p>
 
   {% if results %}
-    <p class="count-label" style="margin-bottom:.75rem;">
-      {% if used_fts %}
-        Searching full document text
-      {% else %}
-        Searching document titles only — run <code>extract_text.py</code> to enable full-text search
-      {% endif %}
-    </p>
+  <ol class="hits">
     {% for r in results %}
-    <div class="card">
-      <a class="card-title" href="{{ r['doc_url'] }}" target="_blank">{{ r['doc_title'] }}</a>
-      <span class="badge badge-{{ r['url_ext'] }}" style="margin-left:.5rem;">{{ r['url_ext'].upper() }}</span>
-      {% if r['looks_like_minutes'] %}<span class="badge badge-minutes" style="margin-left:.3rem;">Minutes</span>{% endif %}
+    <li class="hit">
+      <div class="crumb">
+        <span class="ftype t-{{ r['url_ext'] }}">{{ r['url_ext'] }}</span>
+        <span>{{ r['meeting_date']|apdate }}</span>
+        <a href="{{ url_for('meeting', slug=r['meeting_url'].split('/calendar/')[-1]) }}">{{ r['committee'] or r['meeting_title'] }}</a>
+        {% if r['looks_like_minutes'] %}<span class="flag flag-minutes">Minutes</span>{% endif %}
+      </div>
+      <h3><a href="{{ url_for('doc', doc_id=r['id']) }}">{{ r['doc_title'] }}</a></h3>
       {% if r['snippet'] %}
-      <div style="margin:.5rem 0; font-size:.8375rem; color:var(--muted); line-height:1.5;">
-        {{ r['snippet'] | safe }}
-      </div>
+        {% if '<mark>' in r['snippet'] %}
+        <p class="snip">{{ r['snippet'] | safe }}</p>
+        {% else %}
+        <p class="snip teaser">{{ r['snippet'] | replace('\n', ' · ') | truncate(240) }}</p>
+        {% endif %}
       {% endif %}
-      <div class="meta">
-        <span>{{ r['meeting_date'] }}</span>
-        <span class="pill">{{ r['committee'] }}</span>
-        <a href="{{ url_for('meeting', slug=r['meeting_url'].split('/calendar/')[-1]) }}"
-           style="color:var(--blue); text-decoration:none;">
-          {{ r['meeting_title'] }} →
-        </a>
+      <div class="acts">
+        <a href="{{ r['doc_url'] }}" target="_blank" rel="noopener">Original on ercot.com ↗</a>
       </div>
-    </div>
+    </li>
     {% endfor %}
+  </ol>
+  {% if results|length >= 200 %}<p class="capped">Showing the top 200. Narrow it with a committee or file type.</p>{% endif %}
   {% else %}
-    <p class="empty">No documents matched your filters.</p>
+  <p class="empty">Nothing matched. Try fewer words, or check the spelling.</p>
   {% endif %}
 {% endif %}
+
+<div class="tips">
+  <div>
+    <h4>Exact phrases</h4>
+    <p>Use quotes: <code>"large load"</code> finds the phrase, not the two words apart.</p>
+  </div>
+  <div>
+    <h4>Either / or</h4>
+    <p><code>Google OR Meta</code> finds documents that mention either one.</p>
+  </div>
+  <div>
+    <h4>Word stems</h4>
+    <p><code>batter*</code> matches battery, batteries and battery-backed.</p>
+  </div>
+</div>
 
 {% endblock %}

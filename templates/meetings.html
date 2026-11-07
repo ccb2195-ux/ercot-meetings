@@ -1,73 +1,80 @@
 {% extends "base.html" %}
-{% block title %}Meetings — ERCOT Minutes{% endblock %}
+{% block title %}Meetings | The ERCOT Record{% endblock %}
+{% block head %}
+<style>
+  .m-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 2rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .m-month { font-family: var(--serif); font-size: 1.35rem; font-weight: 700; margin: 2.25rem 0 0; padding-bottom: .5rem; border-bottom: 1px solid var(--ink); display: flex; justify-content: space-between; align-items: baseline; }
+  .m-month small { font-family: var(--sans); font-size: 12px; font-weight: 500; color: var(--muted); }
+  .m-table td:first-child { width: 92px; }
+  .m-table .title a { font-family: var(--serif); font-size: 1.05rem; font-weight: 600; }
+  .m-table .comm { color: var(--muted); font-size: 13px; }
+  .m-table tr.zero .title a { color: var(--muted); font-weight: 500; }
+  .m-table tr.cancelled .title a { text-decoration: line-through; text-decoration-color: var(--wire); color: var(--muted); }
+  .day { font-weight: 700; font-size: 13px; }
+  .dow { display: block; font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+  @media (max-width: 720px) {
+    .m-table .comm-col { display: none; }
+    .m-table td:first-child { width: 64px; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-
-<h1>All Meetings</h1>
-
-<form method="get">
-  <div class="filters">
-    <span class="filter-label">Filter:</span>
-    <select name="committee" onchange="this.form.submit()">
-      <option value="">All committees</option>
-      {% for c in committees %}
-      <option value="{{ c['committee'] }}" {% if c['committee'] == selected %}selected{% endif %}>
-        {{ c['committee'] }}
-      </option>
-      {% endfor %}
-    </select>
-    <select name="year" onchange="this.form.submit()">
-      <option value="">All years</option>
-      {% for y in years %}
-      <option value="{{ y['yr'] }}" {% if y['yr'] == selected_year %}selected{% endif %}>
-        {{ y['yr'] }}
-      </option>
-      {% endfor %}
-    </select>
-    {% if selected or selected_year %}
-    <a href="{{ url_for('meetings') }}" style="font-size:.8125rem; color:var(--muted); text-decoration:none;">✕ Clear</a>
-    {% endif %}
+<div class="m-top">
+  <div>
+    <p class="kicker">Meetings</p>
+    <h1 class="headline" style="margin:0">{% if selected %}{{ selected }}{% else %}Every meeting on the calendar{% endif %}</h1>
   </div>
-</form>
-
-<div class="section-header">
-  <span class="count-label">{{ meetings|length }} meeting{{ 's' if meetings|length != 1 else '' }}</span>
+  <form method="get" class="filters">
+    <label class="field"><span>Committee</span>
+      <select name="committee" onchange="this.form.submit()">
+        <option value="">All committees</option>
+        {% for c in committees %}{% if c['committee'] %}
+        <option value="{{ c['committee'] }}" {% if c['committee'] == selected %}selected{% endif %}>{{ c['committee'] }}</option>
+        {% endif %}{% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>Year</span>
+      <select name="year" onchange="this.form.submit()">
+        <option value="">All years</option>
+        {% for y in years %}
+        <option value="{{ y['yr'] }}" {% if y['yr'] == selected_year %}selected{% endif %}>{{ y['yr'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if selected or selected_year %}<a class="clear" href="{{ url_for('meetings') }}">Clear</a>{% endif %}
+  </form>
 </div>
+
+<p class="byline"><strong>{{ "{:,}".format(meetings|length) }} meeting{{ 's' if meetings|length != 1 }}</strong>
+  <span>{{ "{:,}".format(meetings | sum(attribute='doc_count')) }} documents</span>
+  <span>Meetings with no files are dimmed. Cancelled ones are struck through.</span></p>
 
 {% if meetings %}
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Committee</th>
-        <th>Meeting</th>
-        <th style="text-align:center;">Docs</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for m in meetings %}
-    <tr>
-      <td style="white-space:nowrap; color:var(--muted);">{{ m['date'] }}</td>
-      <td><span class="pill">{{ m['committee'] }}</span></td>
-      <td>
-        <a href="{{ url_for('meeting', slug=m['url'].split('/calendar/')[-1]) }}">
-          {{ m['title'] }}
-        </a>
+  {% set ns = namespace(cur='') %}
+  {% for m in meetings %}
+    {% set mo = m['date'][:7] %}
+    {% if mo != ns.cur %}
+      {% if not loop.first %}</tbody></table>{% endif %}
+      {% set ns.cur = mo %}
+      {% set n_mo = month_counts.get(mo, 0) %}
+      <h2 class="m-month">{{ mo|apmonth }} <small>{{ n_mo }} meeting{{ 's' if n_mo != 1 }}</small></h2>
+      <table class="m-table">
+        <thead class="sr-only"><tr><th>Date</th><th>Meeting</th><th class="comm-col">Committee</th><th class="num">Files</th></tr></thead>
+        <tbody>
+    {% endif %}
+    <tr class="{{ 'cancelled' if m['status'] == 'cancelled' }} {{ 'zero' if not m['doc_count'] }}">
+      <td><span class="day">{{ m['date']|apdate(short=True) }}</span></td>
+      <td class="title">
+        <a href="{{ url_for('meeting', slug=m['url'].split('/calendar/')[-1]) }}">{{ m['title'] }}</a>
+        {% if m['status'] == 'cancelled' %}<span class="flag flag-cancelled">Cancelled</span>{% elif m['status'] == 'rescheduled' %}<span class="flag flag-cancelled">Rescheduled</span>{% elif not m['doc_count'] and m['date'] > (data_through or '') %}<span class="flag flag-sched">Upcoming</span>{% endif %}
       </td>
-      <td style="text-align:center; color:var(--muted);">{{ m['doc_count'] }}</td>
-      <td>
-        {% if m['status'] == 'cancelled' %}
-        <span class="badge badge-cancelled">Cancelled</span>
-        {% else %}—{% endif %}
-      </td>
+      <td class="comm comm-col">{{ m['committee'] }}</td>
+      <td class="num muted nowrap">{{ m['doc_count'] or '—' }}</td>
     </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
+    {% if loop.last %}</tbody></table>{% endif %}
+  {% endfor %}
 {% else %}
-<p class="empty">No meetings found for this filter.</p>
+  <p class="empty">No meetings for that filter.</p>
 {% endif %}
-
 {% endblock %}
